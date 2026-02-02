@@ -234,7 +234,115 @@ class ReadOnlyExperimentService(
         log.info("========== 실험 2-D: 결과 ==========")
         log.info("💡 readOnly=true여도 persist() 자체는 예외 없이 호출 가능!")
         log.info("💡 하지만 트랜잭션 커밋 시점에 flush되지 않을 수 있음")
-        
+
+        return result
+    }
+
+    // ==========================================
+    // 실험 2-E: readOnly=true 메모리 사용량 비교
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    fun experimentReadOnlyMemory(): Map<String, Any?> {
+        log.info("========== 실험 2-E: 메모리 사용량 (readOnly=true) ==========")
+
+        val result = mutableMapOf<String, Any?>()
+        val runtime = Runtime.getRuntime()
+
+        // 영속성 컨텍스트 초기화
+        entityManager.clear()
+
+        // GC 힌트 후 기준선 측정
+        System.gc()
+        Thread.sleep(100)
+        val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
+
+        // 대량 엔티티 로드
+        val transactions = transactionRepository.findAll()
+
+        // 로드 후 메모리 측정
+        val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
+        val memoryDelta = memoryAfter - memoryBefore
+
+        // Session 상태 확인
+        val session = entityManager.unwrap(Session::class.java)
+        val stats = session.statistics
+
+        val memoryBeforeMb = String.format("%.2f", memoryBefore / 1024.0 / 1024.0)
+        val memoryAfterMb = String.format("%.2f", memoryAfter / 1024.0 / 1024.0)
+        val memoryDeltaMb = String.format("%.2f", memoryDelta / 1024.0 / 1024.0)
+
+        log.info("📊 엔티티 수: ${transactions.size}")
+        log.info("📊 로드 전 메모리: ${memoryBeforeMb}MB")
+        log.info("📊 로드 후 메모리: ${memoryAfterMb}MB")
+        log.info("📊 메모리 증가량: ${memoryDeltaMb}MB")
+        log.info("📊 FlushMode: ${session.hibernateFlushMode}")
+        log.info("📊 Session DefaultReadOnly: ${session.isDefaultReadOnly}")
+        log.info("📊 Session Entity Count: ${stats.entityCount}")
+
+        result["readOnly"] = true
+        result["entity_count"] = transactions.size
+        result["memory_before_mb"] = memoryBeforeMb.toDouble()
+        result["memory_after_mb"] = memoryAfterMb.toDouble()
+        result["memory_delta_mb"] = memoryDeltaMb.toDouble()
+        result["flush_mode"] = session.hibernateFlushMode.toString()
+        result["session_default_readonly"] = session.isDefaultReadOnly
+        result["entity_count_in_session"] = stats.entityCount
+
+        log.info("💡 readOnly=true: 스냅샷 저장 생략 → 메모리 절약")
+
+        return result
+    }
+
+    @Transactional(readOnly = false)
+    fun experimentWritableMemory(): Map<String, Any?> {
+        log.info("========== 실험 2-E: 메모리 사용량 (readOnly=false) ==========")
+
+        val result = mutableMapOf<String, Any?>()
+        val runtime = Runtime.getRuntime()
+
+        // 영속성 컨텍스트 초기화
+        entityManager.clear()
+
+        // GC 힌트 후 기준선 측정
+        System.gc()
+        Thread.sleep(100)
+        val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
+
+        // 대량 엔티티 로드
+        val transactions = transactionRepository.findAll()
+
+        // 로드 후 메모리 측정
+        val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
+        val memoryDelta = memoryAfter - memoryBefore
+
+        // Session 상태 확인
+        val session = entityManager.unwrap(Session::class.java)
+        val stats = session.statistics
+
+        val memoryBeforeMb = String.format("%.2f", memoryBefore / 1024.0 / 1024.0)
+        val memoryAfterMb = String.format("%.2f", memoryAfter / 1024.0 / 1024.0)
+        val memoryDeltaMb = String.format("%.2f", memoryDelta / 1024.0 / 1024.0)
+
+        log.info("📊 엔티티 수: ${transactions.size}")
+        log.info("📊 로드 전 메모리: ${memoryBeforeMb}MB")
+        log.info("📊 로드 후 메모리: ${memoryAfterMb}MB")
+        log.info("📊 메모리 증가량: ${memoryDeltaMb}MB")
+        log.info("📊 FlushMode: ${session.hibernateFlushMode}")
+        log.info("📊 Session DefaultReadOnly: ${session.isDefaultReadOnly}")
+        log.info("📊 Session Entity Count: ${stats.entityCount}")
+
+        result["readOnly"] = false
+        result["entity_count"] = transactions.size
+        result["memory_before_mb"] = memoryBeforeMb.toDouble()
+        result["memory_after_mb"] = memoryAfterMb.toDouble()
+        result["memory_delta_mb"] = memoryDeltaMb.toDouble()
+        result["flush_mode"] = session.hibernateFlushMode.toString()
+        result["session_default_readonly"] = session.isDefaultReadOnly
+        result["entity_count_in_session"] = stats.entityCount
+
+        log.info("💡 readOnly=false: 스냅샷 저장 → 더티체킹용 메모리 추가 사용")
+
         return result
     }
 }

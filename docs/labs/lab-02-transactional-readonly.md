@@ -113,6 +113,39 @@ fun experimentReadOnlyWithPersist(): Map<String, Any?> {
 }
 ```
 
+### 실험 E: readOnly 메모리 사용량 비교
+
+```kotlin
+@Transactional(readOnly = true)
+fun experimentReadOnlyMemory(): Map<String, Any?> {
+    val runtime = Runtime.getRuntime()
+
+    entityManager.clear()
+    System.gc()
+    Thread.sleep(100)
+    val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
+
+    val transactions = transactionRepository.findAll()
+
+    val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
+    val memoryDelta = memoryAfter - memoryBefore
+
+    return mapOf(
+        "readOnly" to true,
+        "entity_count" to transactions.size,
+        "memory_before_mb" to memoryBefore / 1024.0 / 1024.0,
+        "memory_after_mb" to memoryAfter / 1024.0 / 1024.0,
+        "memory_delta_mb" to memoryDelta / 1024.0 / 1024.0
+    )
+}
+
+@Transactional(readOnly = false)
+fun experimentWritableMemory(): Map<String, Any?> {
+    // 동일한 로직, readOnly=false
+    // 스냅샷 저장으로 인한 추가 메모리 사용
+}
+```
+
 ## 테스트 방법
 
 ### API 호출
@@ -129,6 +162,9 @@ curl http://localhost:8080/api/v1/experiments/readonly-performance
 
 # 실험 D: persist 시도
 curl http://localhost:8080/api/v1/experiments/readonly-persist
+
+# 실험 E: 메모리 비교
+curl http://localhost:8080/api/v1/experiments/readonly-memory
 ```
 
 ### 예상 결과
@@ -157,6 +193,26 @@ curl http://localhost:8080/api/v1/experiments/readonly-persist
       "fetch_time_ms": 52
     },
     "time_difference_ms": 7
+  }
+}
+```
+
+**실험 E (메모리 비교):**
+```json
+{
+  "data": {
+    "readOnly_true": {
+      "memory_delta_mb": 12.45,
+      "flush_mode": "MANUAL",
+      "entity_count": 10000
+    },
+    "readOnly_false": {
+      "memory_delta_mb": 18.72,
+      "flush_mode": "AUTO",
+      "entity_count": 10000
+    },
+    "memory_saved_mb": 6.27,
+    "snapshot_overhead_explanation": "readOnly=false는 더티체킹을 위해 각 엔티티의 스냅샷 복사본을 저장하므로 추가 메모리를 사용합니다."
   }
 }
 ```
@@ -192,6 +248,22 @@ curl http://localhost:8080/api/v1/experiments/readonly-persist
     ↓
 [flush] ← readOnly=true면 스킵!
 ```
+
+### 메모리 영향
+
+```
+[Entity 조회]
+    ↓
+[1차 캐시 저장] ← 양쪽 모두 동일
+    ↓
+[스냅샷 복사본 저장] ← readOnly=true면 스킵! (메모리 절약 핵심)
+    ↓
+    readOnly=false: 엔티티 수 × 엔티티 크기만큼 추가 힙 메모리 사용
+    readOnly=true:  스냅샷 없음 → 절반 가까이 메모리 절약 가능
+```
+
+> ⚠️ **주의**: `System.gc()`는 JVM에 대한 힌트일 뿐 보장이 아닙니다.
+> 정밀한 메모리 측정이 필요하면 VisualVM, JFR, 또는 `-verbose:gc` 옵션을 사용하세요.
 
 ## 주의사항
 
@@ -273,15 +345,16 @@ fun writeToMaster() { }
 
 ## 결론
 
-| 설정 | FlushMode | 더티체킹 | 자동 flush | 성능 |
-|------|-----------|---------|-----------|------|
-| `readOnly=false` | AUTO | ✅ 수행 | ✅ | 기본 |
-| `readOnly=true` | MANUAL | ❌ 스킵 | ❌ | 최적화 |
+| 설정 | FlushMode | 더티체킹 | 자동 flush | 메모리 | 성능 |
+|------|-----------|---------|-----------|--------|------|
+| `readOnly=false` | AUTO | ✅ 수행 | ✅ | 스냅샷 저장 (추가 사용) | 기본 |
+| `readOnly=true` | MANUAL | ❌ 스킵 | ❌ | 스냅샷 생략 (절약) | 최적화 |
 
 **핵심 포인트:**
 - `readOnly=true`는 **힌트**일 뿐, 강제가 아님
 - 주요 효과는 **FlushMode 변경**과 **더티체킹 스킵**
 - 조회 전용 로직에 적극 활용하면 성능 향상
+- 대량 조회 시 **메모리 절약** 효과 (스냅샷 복사본 생략)
 
 ## 참고 자료
 
