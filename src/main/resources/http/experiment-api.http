@@ -139,3 +139,56 @@ Accept: application/json
 
 DELETE http://localhost:8080/api/v1/experiments/bulk-insert/cleanup
 Accept: application/json
+
+### ==========================================
+### Lab 04: Transaction Propagation (REQUIRED vs REQUIRES_NEW)
+### ==========================================
+
+### 실험 4-1: REQUIRED - 외부 트랜잭션 참여 확인
+GET http://localhost:8080/api/v1/experiments/propagation/4-1/required-joins
+
+### ---
+
+### 실험 4-2: REQUIRED - 트랜잭션 없을 때 새로 생성
+GET http://localhost:8080/api/v1/experiments/propagation/4-2/required-creates-new
+
+### ---
+
+### 실험 4-3: REQUIRES_NEW - 항상 새 트랜잭션 생성
+GET http://localhost:8080/api/v1/experiments/propagation/4-3/requires-new-always-new
+
+### ---
+
+### 실험 4-4: REQUIRED inner 예외 - 롤백 전파 트랩 (UnexpectedRollbackException)
+POST http://localhost:8080/api/v1/experiments/propagation/4-4/required-inner-throws
+
+### ---
+
+### 실험 4-5: REQUIRES_NEW inner 예외 - outer 생존
+POST http://localhost:8080/api/v1/experiments/propagation/4-5/requires-new-inner-throws
+
+### ---
+
+### 실험 4-6: Outer 실패 후 REQUIRES_NEW inner 생존
+POST http://localhost:8080/api/v1/experiments/propagation/4-6/outer-fails-after-inner
+
+### ---
+
+### 실험 4-7: UnexpectedRollbackException 상세 분석 (3 시나리오)
+POST http://localhost:8080/api/v1/experiments/propagation/4-7/unexpected-rollback-deep-dive
+
+### ---
+
+### 실험 4-8: DB 커넥션 분리 확인
+GET http://localhost:8080/api/v1/experiments/propagation/4-8/connection-separation
+
+### ---
+
+### 실험 4-9: 커넥션 풀 고갈 시뮬레이션
+### WARNING: 이 요청은 약 30초 소요됩니다! HikariCP 풀 고갈 대기 시간.
+POST http://localhost:8080/api/v1/experiments/propagation/4-9/connection-pool-exhaustion
+
+### ---
+
+### Lab 04 테스트 데이터 정리
+DELETE http://localhost:8080/api/v1/experiments/propagation/cleanup

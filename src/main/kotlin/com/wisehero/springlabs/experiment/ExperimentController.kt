@@ -3,6 +3,7 @@ package com.wisehero.springlabs.experiment
 import com.wisehero.springlabs.common.dto.ApiResponse
 import com.wisehero.springlabs.experiment.dto.ExperimentSummary
 import com.wisehero.springlabs.experiment.dto.InsertResult
+import com.wisehero.springlabs.experiment.dto.PropagationResult
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -26,7 +27,8 @@ class ExperimentController(
     private val transactionExperimentService: TransactionExperimentService,
     private val transactionExternalService: TransactionExperimentExternalService,
     private val readOnlyExperimentService: ReadOnlyExperimentService,
-    private val bulkInsertExperimentService: BulkInsertExperimentService
+    private val bulkInsertExperimentService: BulkInsertExperimentService,
+    private val propagationExperimentService: PropagationExperimentService
 ) {
     
     private val log = LoggerFactory.getLogger(javaClass)
@@ -193,12 +195,52 @@ class ExperimentController(
             "readOnly에서 persist 테스트"
         ))
     }
-    
+
+    /**
+     * ==========================================
+     * 실험 2-E: readOnly 메모리 사용량 비교
+     * ==========================================
+     *
+     * GET /api/v1/experiments/readonly-memory
+     *
+     * readOnly=true vs readOnly=false 메모리 사용량 차이 확인
+     */
+    @GetMapping("/readonly-memory")
+    fun testReadOnlyMemory(): ResponseEntity<ApiResponse<Map<String, Any?>>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 2-E: readOnly 메모리 사용량 비교                       ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        // readOnly=true 메모리 측정
+        val readOnlyResult = readOnlyExperimentService.experimentReadOnlyMemory()
+
+        // readOnly=false 메모리 측정
+        val writableResult = readOnlyExperimentService.experimentWritableMemory()
+
+        val readOnlyDelta = readOnlyResult["memory_delta_mb"] as Double
+        val writableDelta = writableResult["memory_delta_mb"] as Double
+        val memorySaved = writableDelta - readOnlyDelta
+
+        val comparison = mapOf(
+            "readOnly_true" to readOnlyResult,
+            "readOnly_false" to writableResult,
+            "memory_saved_mb" to String.format("%.2f", memorySaved).toDouble(),
+            "snapshot_overhead_explanation" to "readOnly=false는 더티체킹을 위해 각 엔티티의 스냅샷 복사본을 저장하므로 추가 메모리를 사용합니다."
+        )
+
+        return ResponseEntity.ok(ApiResponse.success(
+            comparison,
+            "readOnly 메모리 비교 완료 (절약: ${String.format("%.2f", memorySaved)}MB)"
+        ))
+    }
+
     /**
      * ==========================================
      * 모든 실험 한 번에 실행
      * ==========================================
-     * 
+     *
      * GET /api/v1/experiments/all
      */
     @GetMapping("/all")
@@ -229,7 +271,14 @@ class ExperimentController(
             "readOnly_true" to readOnlyExperimentService.experimentReadOnlyPerformance(),
             "readOnly_false" to readOnlyExperimentService.experimentWritablePerformance()
         )
-        
+
+        // 실험 2-E
+        log.info(">>> 실험 2-E 시작")
+        results["experiment_2e_readonly_memory"] = mapOf(
+            "readOnly_true" to readOnlyExperimentService.experimentReadOnlyMemory(),
+            "readOnly_false" to readOnlyExperimentService.experimentWritableMemory()
+        )
+
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
         log.info("║  🎉 모든 실험 완료! 로그를 확인하세요                        ║")
@@ -324,6 +373,177 @@ class ExperimentController(
         return ResponseEntity.ok(ApiResponse.success(
             mapOf("deletedCount" to deleted),
             "테스트 데이터 ${deleted}건 삭제"
+        ))
+    }
+
+    // ==========================================
+    // 실험 4: Transaction Propagation (REQUIRED vs REQUIRES_NEW)
+    // ==========================================
+
+    /**
+     * 실험 4-1: REQUIRED - 외부 트랜잭션 존재 시 참여
+     * GET /api/v1/experiments/propagation/4-1/required-joins
+     */
+    @GetMapping("/propagation/4-1/required-joins")
+    fun testRequiredJoins(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-1: REQUIRED - 외부 트랜잭션 참여 확인                  ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_1_requiredJoinsExisting()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-1 완료: ${result.conclusion}"))
+    }
+
+    /**
+     * 실험 4-2: REQUIRED - 트랜잭션 없을 때 새로 생성
+     * GET /api/v1/experiments/propagation/4-2/required-creates-new
+     */
+    @GetMapping("/propagation/4-2/required-creates-new")
+    fun testRequiredCreatesNew(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-2: REQUIRED - 트랜잭션 없을 때 새로 생성               ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_2_requiredCreatesNew()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-2 완료: ${result.conclusion}"))
+    }
+
+    /**
+     * 실험 4-3: REQUIRES_NEW - 항상 새 트랜잭션 생성
+     * GET /api/v1/experiments/propagation/4-3/requires-new-always-new
+     */
+    @GetMapping("/propagation/4-3/requires-new-always-new")
+    fun testRequiresNewAlwaysNew(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-3: REQUIRES_NEW - 항상 새 트랜잭션 생성               ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_3_requiresNewAlwaysNew()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-3 완료: ${result.conclusion}"))
+    }
+
+    /**
+     * 실험 4-4: REQUIRED inner 예외 - 롤백 전파 트랩
+     * POST /api/v1/experiments/propagation/4-4/required-inner-throws
+     *
+     * 핵심: inner가 예외를 던지고 outer가 catch해도, 공유 트랜잭션은 이미 rollback-only.
+     * 커밋 시 UnexpectedRollbackException 발생!
+     */
+    @PostMapping("/propagation/4-4/required-inner-throws")
+    fun testRequiredInnerThrows(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-4: REQUIRED 롤백 트랩 (UnexpectedRollbackException)  ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_4_requiredRollbackTrap()
+        propagationExperimentService.cleanupTestData()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-4 완료"))
+    }
+
+    /**
+     * 실험 4-5: REQUIRES_NEW inner 예외 - outer 생존
+     * POST /api/v1/experiments/propagation/4-5/requires-new-inner-throws
+     */
+    @PostMapping("/propagation/4-5/requires-new-inner-throws")
+    fun testRequiresNewInnerThrows(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-5: REQUIRES_NEW Inner 예외 - Outer 생존              ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_5_requiresNewInnerThrows()
+        propagationExperimentService.cleanupTestData()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-5 완료"))
+    }
+
+    /**
+     * 실험 4-6: Outer 실패 후 REQUIRES_NEW inner 생존
+     * POST /api/v1/experiments/propagation/4-6/outer-fails-after-inner
+     */
+    @PostMapping("/propagation/4-6/outer-fails-after-inner")
+    fun testOuterFailsAfterInner(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-6: Outer 실패 후 REQUIRES_NEW Inner 생존             ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_6_outerFailsAfterInnerSucceeds()
+        propagationExperimentService.cleanupTestData()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-6 완료"))
+    }
+
+    /**
+     * 실험 4-7: UnexpectedRollbackException 상세 분석 (3 시나리오)
+     * POST /api/v1/experiments/propagation/4-7/unexpected-rollback-deep-dive
+     */
+    @PostMapping("/propagation/4-7/unexpected-rollback-deep-dive")
+    fun testUnexpectedRollbackDeepDive(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-7: UnexpectedRollbackException 상세 분석             ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_7_unexpectedRollbackDeepDive()
+        propagationExperimentService.cleanupTestData()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-7 완료"))
+    }
+
+    /**
+     * 실험 4-8: DB 커넥션 분리 확인
+     * GET /api/v1/experiments/propagation/4-8/connection-separation
+     */
+    @GetMapping("/propagation/4-8/connection-separation")
+    fun testConnectionSeparation(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-8: DB 커넥션 분리 확인                                ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_8_connectionSeparation()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-8 완료"))
+    }
+
+    /**
+     * 실험 4-9: 커넥션 풀 고갈 시뮬레이션
+     * POST /api/v1/experiments/propagation/4-9/connection-pool-exhaustion
+     *
+     * WARNING: 이 엔드포인트는 약 30초 소요됩니다!
+     * HikariCP 풀 사이즈(10)를 초과하는 REQUIRES_NEW 중첩으로 connectionTimeout 대기 발생.
+     */
+    @PostMapping("/propagation/4-9/connection-pool-exhaustion")
+    fun testConnectionPoolExhaustion(): ResponseEntity<ApiResponse<PropagationResult>> {
+        log.info("")
+        log.info("╔════════════════════════════════════════════════════════════╗")
+        log.info("║  실험 4-9: 커넥션 풀 고갈 시뮬레이션 (약 30초 소요)            ║")
+        log.info("╚════════════════════════════════════════════════════════════╝")
+        log.info("")
+
+        val result = propagationExperimentService.experiment4_9_connectionPoolExhaustion()
+        return ResponseEntity.ok(ApiResponse.success(result, "실험 4-9 완료"))
+    }
+
+    /**
+     * Lab 04 테스트 데이터 정리
+     * DELETE /api/v1/experiments/propagation/cleanup
+     */
+    @DeleteMapping("/propagation/cleanup")
+    fun cleanupPropagationTestData(): ResponseEntity<ApiResponse<Map<String, Int>>> {
+        val deleted = propagationExperimentService.cleanupTestData()
+        return ResponseEntity.ok(ApiResponse.success(
+            mapOf("deletedCount" to deleted),
+            "Lab 04 테스트 데이터 ${deleted}건 삭제"
         ))
     }
 }
