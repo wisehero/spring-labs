@@ -70,7 +70,7 @@ logging.level.org.springframework.aop=DEBUG
 ## 관련 소스 코드
 
 ```
-src/main/kotlin/com/wisehero/springdemo/experiment/
+src/main/kotlin/com/wisehero/springlabs/experiment/
 ├── TransactionExperimentService.kt   # 실험 1: 자기호출
 ├── ReadOnlyExperimentService.kt      # 실험 2: readOnly
 ├── BulkInsertExperimentService.kt    # 실험 3: Bulk Insert

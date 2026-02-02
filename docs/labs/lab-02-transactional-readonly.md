@@ -28,7 +28,7 @@
 
 ### 위치
 ```
-src/main/kotlin/com/wisehero/springdemo/experiment/ReadOnlyExperimentService.kt
+src/main/kotlin/com/wisehero/springlabs/experiment/ReadOnlyExperimentService.kt
 ```
 
 ### 실험 A: readOnly 상태 확인

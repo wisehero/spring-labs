@@ -9,7 +9,7 @@ plugins {
 
 group = 'com.wisehero'
 version = '0.0.1-SNAPSHOT'
-description = 'springdemo'
+description = 'springlabs'
 
 java {
     toolchain {

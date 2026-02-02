@@ -377,7 +377,7 @@ LINES TERMINATED BY '\n';
 ## 관련 소스 코드
 
 ```
-src/main/kotlin/com/wisehero/springdemo/experiment/
+src/main/kotlin/com/wisehero/springlabs/experiment/
 ├── BulkInsertExperimentService.kt    # 3가지 방식 구현
 ├── dto/
 │   └── BulkInsertResult.kt           # 결과 DTO

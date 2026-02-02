@@ -42,7 +42,7 @@ class MyService {
 
 ### 위치
 ```
-src/main/kotlin/com/wisehero/springdemo/experiment/TransactionExperimentService.kt
+src/main/kotlin/com/wisehero/springlabs/experiment/TransactionExperimentService.kt
 ```
 
 ### 실험 A: 자기 호출 (문제 케이스)
