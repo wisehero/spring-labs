@@ -1,0 +1,130 @@
+### 거래내역 조회 API
+
+## ========================================
+## 워밍업 요청 (JIT 컴파일, 커넥션 풀 초기화)
+## ========================================
+
+## 워밍업 - 단건 조회로 DB 커넥션 및 JPA 초기화
+GET http://localhost:8080/api/v1/transactions?page=0&size=1
+Content-Type: application/json
+
+###
+
+## ========================================
+## 기본 조회
+## ========================================
+
+## 기본 조회 (페이징 기본값: page=0, size=20)
+GET http://localhost:8080/api/v1/transactions
+Content-Type: application/json
+
+###
+
+## 페이징 조회
+GET http://localhost:8080/api/v1/transactions?page=0&size=10
+Content-Type: application/json
+
+###
+
+## 거래상태로 검색
+GET http://localhost:8080/api/v1/transactions?transactionState=거래승인&page=0&size=10
+Content-Type: application/json
+
+###
+
+## 사업자번호로 검색
+GET http://localhost:8080/api/v1/transactions?businessNo=1234567890&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 날짜 범위로 검색
+GET http://localhost:8080/api/v1/transactions?startDateTime=2026-01-01T00:00:00&endDateTime=2026-01-31T23:59:59&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 금액 범위로 검색
+GET http://localhost:8080/api/v1/transactions?minAmount=10000&maxAmount=100000&page=0&size=20
+Content-Type: application/json
+
+###
+
+## POS 거래번호로 검색
+GET http://localhost:8080/api/v1/transactions?posTransactionNo=POS202511281955130000000000&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 현금영수증 발행여부로 검색
+GET http://localhost:8080/api/v1/transactions?cashReceiptIssueYn=true&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 정렬 옵션 (금액 오름차순)
+GET http://localhost:8080/api/v1/transactions?sortBy=amount&sortDirection=asc&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 정렬 옵션 (승인일시 내림차순 - 기본값)
+GET http://localhost:8080/api/v1/transactions?sortBy=approveDateTime&sortDirection=desc&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 복합 검색 조건 (날짜 + 상태 + 금액)
+GET http://localhost:8080/api/v1/transactions?startDateTime=2026-01-01T00:00:00&endDateTime=2026-01-31T23:59:59&transactionState=거래승인&minAmount=5000&maxAmount=50000&page=0&size=20
+Content-Type: application/json
+
+###
+
+## 복합 검색 조건 (사업자번호 + 현금영수증 + 정렬)
+GET http://localhost:8080/api/v1/transactions?businessNo=1234567890&cashReceiptIssueYn=true&sortBy=amount&sortDirection=desc&page=0&size=50
+Content-Type: application/json
+
+###
+
+## ========================================
+## 카운트 쿼리 최적화 (2페이지 이후)
+## ========================================
+
+## 첫 페이지 조회 (카운트 쿼리 실행 - totalElements 미전달)
+GET http://localhost:8080/api/v1/transactions?page=0&size=20
+Content-Type: application/json
+
+###
+
+## 두 번째 페이지 (카운트 쿼리 스킵 - 첫 페이지에서 받은 totalElements 전달)
+## totalElements=1000000 은 첫 페이지 응답의 data.totalElements 값을 사용
+GET http://localhost:8080/api/v1/transactions?page=1&size=20&totalElements=1000000
+Content-Type: application/json
+
+###
+
+## 세 번째 페이지 (카운트 쿼리 스킵)
+GET http://localhost:8080/api/v1/transactions?page=2&size=20&totalElements=1000000
+Content-Type: application/json
+
+###
+
+## 검색 조건 + 카운트 쿼리 스킵
+GET http://localhost:8080/api/v1/transactions?transactionState=거래승인&page=1&size=20&totalElements=50000
+Content-Type: application/json
+
+###
+
+## ========================================
+## 거래내역 상세 조회
+## ========================================
+
+## 거래내역 상세 조회 (ID로 조회)
+GET http://localhost:8080/api/v1/transactions/1
+Content-Type: application/json
+
+###
+
+## 거래내역 상세 조회 (다른 ID)
+GET http://localhost:8080/api/v1/transactions/100
+Content-Type: application/json
