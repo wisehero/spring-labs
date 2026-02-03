@@ -10,7 +10,7 @@ Spring Framework의 숨겨진 동작들을 직접 테스트하고 검증하는 �
 | 1 | [@Transactional 자기 호출 함정](./lab-01-transactional-self-invocation.md) | ⭐ | ✅ 완료 |
 | 2 | [@Transactional(readOnly=true) 실제 효과](./lab-02-transactional-readonly.md) | ⭐⭐ | ✅ 완료 |
 | 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](./lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
-| 4 | QueryDSL N+1 문제와 해결책 | ⭐⭐⭐ | 📋 예정 |
+| 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](./lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
 | 5 | Kotlin data class + JPA 함정 | ⭐⭐ | 📋 예정 |
 | 6 | Bean 순환 참조 해결 방법들 | ⭐⭐ | 📋 예정 |
 
@@ -41,7 +41,7 @@ src/main/resources/http/experiment-api.http
 
 또는 curl:
 ```bash
-curl http://localhost:8080/api/v1/experiments/all
+curl http://localhost:8080/api/v1/experiments/self-invocation
 ```
 
 ### 3. 로그 확인
@@ -70,11 +70,21 @@ logging.level.org.springframework.aop=DEBUG
 ## 관련 소스 코드
 
 ```
-src/main/kotlin/com/wisehero/springlabs/experiment/
-├── TransactionExperimentService.kt   # 실험 1: 자기호출
-├── ReadOnlyExperimentService.kt      # 실험 2: readOnly
-├── BulkInsertExperimentService.kt    # 실험 3: Bulk Insert
-├── dto/
-│   └── BulkInsertResult.kt           # 실험 3 결과 DTO
-└── ExperimentController.kt           # 실험 API
+src/main/kotlin/com/wisehero/springlabs/
+├── labs01/                                        # Lab 01: 자기호출
+│   ├── Lab01Controller.kt
+│   ├── TransactionExperimentService.kt
+│   └── TransactionExperimentExternalService.kt
+├── labs02/                                        # Lab 02: readOnly
+│   ├── Lab02Controller.kt
+│   └── ReadOnlyExperimentService.kt
+├── labs03/                                        # Lab 03: Bulk Insert
+│   ├── Lab03Controller.kt
+│   ├── BulkInsertExperimentService.kt
+│   └── dto/BulkInsertResult.kt
+└── labs04/                                        # Lab 04: Transaction Propagation
+    ├── Lab04Controller.kt
+    ├── PropagationExperimentService.kt
+    ├── PropagationExperimentInnerService.kt
+    └── dto/PropagationResult.kt
 ```

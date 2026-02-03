@@ -1,4 +1,4 @@
-package com.wisehero.springlabs.experiment.dto
+package com.wisehero.springlabs.labs04.dto
 
 /**
  * Lab 04: 트랜잭션 전파(Propagation) 실험 결과 DTO
@@ -23,9 +23,6 @@ data class PropagationResult(
     val conclusion: String
 ) {
     companion object {
-        /**
-         * 실험 성공 결과 생성 (4-1, 4-2, 4-3 등 단순 관찰 실험용)
-         */
         fun success(
             experimentId: String,
             experimentName: String,
@@ -46,10 +43,6 @@ data class PropagationResult(
             details = details
         )
 
-        /**
-         * 롤백 트랩 결과 생성 (4-4, 4-7 등 UnexpectedRollbackException 실험용)
-         * Non-transactional wrapper에서 예외를 잡은 후 호출
-         */
         fun rollbackTrap(
             experimentId: String,
             exception: Exception,
@@ -75,9 +68,6 @@ data class PropagationResult(
             details = details
         )
 
-        /**
-         * 예상치 못한 성공 (실험이 예외를 기대했는데 성공한 경우)
-         */
         fun unexpectedSuccess(experimentId: String) = PropagationResult(
             experimentId = experimentId,
             experimentName = "예상치 못한 성공",
@@ -85,9 +75,6 @@ data class PropagationResult(
             conclusion = "예상과 다른 결과 - 디버깅 필요"
         )
 
-        /**
-         * 데이터 변경 실험 결과 (4-5, 4-6 등 부분 커밋/롤백 확인용)
-         */
         fun dataExperiment(
             experimentId: String,
             experimentName: String,
@@ -115,9 +102,6 @@ data class PropagationResult(
             details = details
         )
 
-        /**
-         * 커넥션 정보 실험 결과 (4-8, 4-9 용)
-         */
         fun connectionInfo(
             experimentId: String,
             experimentName: String,

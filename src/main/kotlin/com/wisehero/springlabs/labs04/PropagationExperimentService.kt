@@ -1,7 +1,7 @@
-package com.wisehero.springlabs.experiment
+package com.wisehero.springlabs.labs04
 
 import com.wisehero.springlabs.entity.Transaction
-import com.wisehero.springlabs.experiment.dto.PropagationResult
+import com.wisehero.springlabs.labs04.dto.PropagationResult
 import com.wisehero.springlabs.repository.TransactionRepository
 import jakarta.persistence.EntityManager
 import org.hibernate.Session
@@ -48,10 +48,6 @@ class PropagationExperimentService(
         const val TEST_PREFIX = "PROP-"
     }
 
-    // ==========================================
-    // 테스트 데이터 생성 헬퍼
-    // ==========================================
-
     private fun createTestTransaction(businessNo: String): Transaction {
         return Transaction(
             approveDateTime = LocalDateTime.now(),
@@ -64,10 +60,6 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-1: REQUIRED - 외부 트랜잭션 존재 시 참여
-    // ==========================================
-
     @Transactional
     fun experiment4_1_requiredJoinsExisting(): PropagationResult {
         log.info("========== 실험 4-1: REQUIRED 외부 트랜잭션 참여 ==========")
@@ -76,7 +68,6 @@ class PropagationExperimentService(
         val outerTxActive = TransactionSynchronizationManager.isActualTransactionActive()
         log.info("[OUTER] tx_name: $outerTxName, active: $outerTxActive")
 
-        // Inner REQUIRED 호출 - 같은 트랜잭션에 참여해야 함
         val innerResult = innerService.innerWithRequired()
         val innerTxName = innerResult["tx_name"] as? String
 
@@ -103,11 +94,6 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-2: REQUIRED - 트랜잭션 없을 때 새로 생성
-    // ==========================================
-
-    // NO @Transactional - 트랜잭션 없는 상태에서 시작
     fun experiment4_2_requiredCreatesNew(): PropagationResult {
         log.info("========== 실험 4-2: REQUIRED 트랜잭션 없을 때 새로 생성 ==========")
 
@@ -115,7 +101,6 @@ class PropagationExperimentService(
         val callerTxName = TransactionSynchronizationManager.getCurrentTransactionName()
         log.info("[CALLER - no @Transactional] tx_active: $callerTxActive, tx_name: $callerTxName")
 
-        // Inner REQUIRED 호출 - 트랜잭션이 없으므로 새로 생성해야 함
         val innerResult = innerService.innerWithRequired()
         val innerTxName = innerResult["tx_name"] as? String
         val innerTxActive = innerResult["tx_active"] as? Boolean ?: false
@@ -141,10 +126,6 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-3: REQUIRES_NEW - 항상 새 트랜잭션 생성
-    // ==========================================
-
     @Transactional
     fun experiment4_3_requiresNewAlwaysNew(): PropagationResult {
         log.info("========== 실험 4-3: REQUIRES_NEW 항상 새 트랜잭션 ==========")
@@ -152,7 +133,6 @@ class PropagationExperimentService(
         val outerTxName = TransactionSynchronizationManager.getCurrentTransactionName()
         log.info("[OUTER] tx_name: $outerTxName")
 
-        // Inner REQUIRES_NEW 호출 - 새 트랜잭션이어야 함
         val innerResult = innerService.innerWithRequiresNew()
         val innerTxName = innerResult["tx_name"] as? String
 
@@ -179,25 +159,15 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-4: REQUIRED Inner 예외 - 롤백 트랩
-    // ==========================================
-
-    // *** NO @Transactional *** - Non-transactional wrapper 패턴
-    // UnexpectedRollbackException을 여기서 catch하여 GlobalExceptionHandler에 누출 방지
     fun experiment4_4_requiredRollbackTrap(): PropagationResult {
         log.info("========== 실험 4-4: REQUIRED 롤백 트랩 (UnexpectedRollbackException) ==========")
 
         return try {
-            // InnerService의 @Transactional 메서드 호출
-            // 이 메서드 내부에서: outer 행 삽입 -> inner REQUIRED가 예외 -> outer catch -> 커밋 시도 실패
             innerService.outerWithRequiredCatchingInnerThrow("PROP-4-4")
-            // 여기 도달하면 예상과 다름
             PropagationResult.unexpectedSuccess("4-4")
         } catch (e: UnexpectedRollbackException) {
             log.info("[결과] UnexpectedRollbackException 발생! (예상대로)")
 
-            // 트랜잭션이 롤백되었으므로 새 트랜잭션에서 데이터 확인
             val outerRowExists = transactionRepository.existsByBusinessNo("PROP-4-4-OUTER")
             val innerRowExists = transactionRepository.existsByBusinessNo("PROP-4-4-INNER")
             log.info("[결과] outer 행 존재: $outerRowExists, inner 행 존재: $innerRowExists")
@@ -217,21 +187,14 @@ class PropagationExperimentService(
         }
     }
 
-    // ==========================================
-    // 실험 4-5: REQUIRES_NEW Inner 예외 - Outer 생존
-    // ==========================================
-
     @Transactional
     fun experiment4_5_requiresNewInnerThrows(): PropagationResult {
         log.info("========== 실험 4-5: REQUIRES_NEW Inner 예외, Outer 생존 ==========")
 
-        // 1. Outer 행 삽입
-        // GenerationType.IDENTITY: persist() 시 즉시 INSERT 실행됨 - flush() 불필요
         val outerTx = createTestTransaction("PROP-4-5-OUTER")
         transactionRepository.save(outerTx)
         log.info("[OUTER] 행 삽입 완료: PROP-4-5-OUTER")
 
-        // 2. Inner REQUIRES_NEW 호출 - 예외 발생
         var innerException: Exception? = null
         try {
             innerService.innerWithRequiresNewAndThrow("PROP-4-5")
@@ -240,7 +203,6 @@ class PropagationExperimentService(
             log.info("[OUTER] Inner 예외 catch (REQUIRES_NEW이므로 outer에 영향 없음): ${e.message}")
         }
 
-        // 3. Outer는 정상 커밋
         log.info("[OUTER] 정상 커밋 진행")
 
         val outerRowExists = transactionRepository.existsByBusinessNo("PROP-4-5-OUTER")
@@ -266,11 +228,6 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-6: Outer 실패 후 REQUIRES_NEW Inner 생존
-    // ==========================================
-
-    // *** NO @Transactional *** - Non-transactional wrapper 패턴
     fun experiment4_6_outerFailsAfterInnerSucceeds(): PropagationResult {
         log.info("========== 실험 4-6: Outer 실패 후 REQUIRES_NEW Inner 생존 ==========")
 
@@ -305,17 +262,11 @@ class PropagationExperimentService(
         }
     }
 
-    // ==========================================
-    // 실험 4-7: UnexpectedRollbackException 상세 분석
-    // ==========================================
-
-    // *** NO @Transactional *** - Non-transactional wrapper 패턴
     fun experiment4_7_unexpectedRollbackDeepDive(): PropagationResult {
         log.info("========== 실험 4-7: UnexpectedRollbackException 상세 분석 ==========")
 
         val scenarioResults = mutableMapOf<String, Any>()
 
-        // Scenario A: Inner 예외 catch 후 rollback-only 플래그 확인
         log.info("--- Scenario A: catch 후 rollback-only 확인 ---")
         val scenarioA = try {
             innerService.outerScenarioA_catchAndCheckRollbackOnly("PROP-4-7A")
@@ -328,7 +279,6 @@ class PropagationExperimentService(
         }
         scenarioResults["scenario_a"] = scenarioA
 
-        // Scenario B: Inner 예외를 catch하지 않음
         log.info("--- Scenario B: Inner 예외 전파 ---")
         val scenarioB = try {
             innerService.outerScenarioB_letInnerPropagate("PROP-4-7B")
@@ -342,7 +292,6 @@ class PropagationExperimentService(
         }
         scenarioResults["scenario_b"] = scenarioB
 
-        // Scenario C: Inner가 setRollbackOnly() 호출, 예외 없음
         log.info("--- Scenario C: setRollbackOnly() 예외 없음 ---")
         val scenarioC = try {
             innerService.outerScenarioC_innerSetsRollbackOnly()
@@ -368,15 +317,10 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-8: DB 커넥션 분리 확인
-    // ==========================================
-
     @Transactional
     fun experiment4_8_connectionSeparation(): PropagationResult {
         log.info("========== 실험 4-8: DB 커넥션 분리 확인 ==========")
 
-        // Outer 커넥션 정보
         val outerSession = entityManager.unwrap(Session::class.java)
         var outerConnectionId = ""
         outerSession.doWork { connection ->
@@ -385,12 +329,10 @@ class PropagationExperimentService(
         val outerTxName = TransactionSynchronizationManager.getCurrentTransactionName()
         log.info("[OUTER] connection: $outerConnectionId, tx: $outerTxName")
 
-        // REQUIRES_NEW inner - 새 커넥션이어야 함
         val requiresNewResult = innerService.innerWithRequiresNewConnectionCheck()
         val requiresNewConnId = requiresNewResult["connection_id"] as? String ?: ""
         log.info("[REQUIRES_NEW] connection: $requiresNewConnId")
 
-        // REQUIRED inner (대조군) - 같은 커넥션이어야 함
         val requiredResult = innerService.innerWithRequiredConnectionCheck()
         val requiredConnId = requiredResult["connection_id"] as? String ?: ""
         log.info("[REQUIRED] connection: $requiredConnId")
@@ -421,25 +363,19 @@ class PropagationExperimentService(
         )
     }
 
-    // ==========================================
-    // 실험 4-9: 커넥션 풀 고갈 시뮬레이션
-    // ==========================================
-
-    // *** NO @Transactional *** - 재귀 inner 호출이 각자 트랜잭션 생성
     fun experiment4_9_connectionPoolExhaustion(): PropagationResult {
         log.info("========== 실험 4-9: 커넥션 풀 고갈 시뮬레이션 ==========")
         log.info("HikariCP 기본 풀 사이즈: 10, connectionTimeout: 30초")
         log.info("REQUIRES_NEW를 11단계 중첩하여 풀 고갈을 유발합니다.")
         log.info("이 실험은 약 30초 소요됩니다.")
 
-        val maxDepth = 11  // 풀 사이즈(10) + 1
+        val maxDepth = 11
         val results = mutableListOf<Map<String, Any>>()
         val startTime = System.currentTimeMillis()
 
         return try {
             innerService.innerWithRequiresNewRecursive(1, maxDepth, results)
 
-            // 여기 도달하면 풀이 고갈되지 않음 (예상과 다름)
             val elapsed = System.currentTimeMillis() - startTime
             PropagationResult.connectionInfo(
                 experimentId = "4-9",
@@ -460,7 +396,6 @@ class PropagationExperimentService(
             log.info("[결과] 예외: ${e::class.simpleName}: ${e.message}")
             log.info("[결과] 소요시간: ${elapsed}ms")
 
-            // 유니크 커넥션 수 확인
             val uniqueConnections = results.map { it["connection_id"] }.distinct().size
 
             PropagationResult.connectionInfo(
@@ -490,10 +425,6 @@ class PropagationExperimentService(
             )
         }
     }
-
-    // ==========================================
-    // 유틸리티
-    // ==========================================
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun cleanupTestData(): Int {

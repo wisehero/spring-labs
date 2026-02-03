@@ -1,4 +1,4 @@
-package com.wisehero.springlabs.experiment.dto
+package com.wisehero.springlabs.labs03.dto
 
 import java.time.LocalDateTime
 
@@ -9,8 +9,8 @@ data class InsertResult(
     val method: String,
     val count: Int,
     val durationMs: Long,
-    val throughput: Double,      // records/second
-    val avgPerRecordMs: Double   // ms/record
+    val throughput: Double,
+    val avgPerRecordMs: Double
 ) {
     companion object {
         fun of(method: String, count: Int, durationMs: Long): InsertResult {
@@ -32,8 +32,8 @@ data class ExperimentSummary(
     val testDate: LocalDateTime = LocalDateTime.now(),
     val entityType: String = "Transaction",
     val testCounts: List<Int>,
-    val results: Map<Int, List<InsertResult>>,   // count -> results for each method
-    val rankings: Map<Int, List<RankingEntry>>   // count -> sorted by speed
+    val results: Map<Int, List<InsertResult>>,
+    val rankings: Map<Int, List<RankingEntry>>
 )
 
 data class RankingEntry(
@@ -41,5 +41,5 @@ data class RankingEntry(
     val method: String,
     val durationMs: Long,
     val throughput: Double,
-    val comparedToFirst: String  // e.g., "2.5x slower"
+    val comparedToFirst: String
 )

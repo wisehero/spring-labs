@@ -1,9 +1,9 @@
-package com.wisehero.springlabs.experiment
+package com.wisehero.springlabs.labs03
 
 import com.wisehero.springlabs.entity.Transaction
-import com.wisehero.springlabs.experiment.dto.ExperimentSummary
-import com.wisehero.springlabs.experiment.dto.InsertResult
-import com.wisehero.springlabs.experiment.dto.RankingEntry
+import com.wisehero.springlabs.labs03.dto.ExperimentSummary
+import com.wisehero.springlabs.labs03.dto.InsertResult
+import com.wisehero.springlabs.labs03.dto.RankingEntry
 import com.wisehero.springlabs.repository.TransactionRepository
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
@@ -24,12 +24,12 @@ import kotlin.random.Random
  * ==========================================
  * Lab 03: Bulk Insert 성능 비교 실험
  * ==========================================
- * 
+ *
  * 비교 대상:
  * 1. JPA saveAll() - 엔티티 기반, 더티체킹 오버헤드
  * 2. JdbcTemplate batchUpdate() - JDBC 배치 처리
  * 3. Native Bulk Insert - VALUES 절에 여러 row
- * 
+ *
  * 테스트 규모: 100건, 1,000건, 10,000건
  */
 @Service
@@ -39,59 +39,44 @@ class BulkInsertExperimentService(
     private val entityManager: EntityManager
 ) {
 
-    // Self-injection: 프록시를 통한 내부 메서드 호출을 위함
-    // Lab 01의 self-invocation 문제 해결
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private lateinit var self: BulkInsertExperimentService
-    
+
     private val log = LoggerFactory.getLogger(javaClass)
-    
+
     companion object {
-        const val TEST_PREFIX = "BT-"  // 20자 제한 맞춤 (business_no column)
+        const val TEST_PREFIX = "BT-"
         val DEFAULT_TEST_COUNTS = listOf(100, 1000, 10000)
     }
-    
-    // ==========================================
-    // 방법 1: JPA saveAll
-    // ==========================================
-    
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun insertWithSaveAll(count: Int): InsertResult {
         log.info("========== JPA saveAll 테스트 시작 (${count}건) ==========")
-        
-        // 테스트 데이터 생성
+
         val transactions = generateTestTransactions(count, "SAVEALL")
-        
+
         val start = System.currentTimeMillis()
-        
-        // saveAll 실행
+
         transactionRepository.saveAll(transactions)
-        
-        // flush로 실제 INSERT 강제 실행
         entityManager.flush()
-        
+
         val duration = System.currentTimeMillis() - start
-        
-        // 1차 캐시 정리
+
         entityManager.clear()
-        
+
         log.info("✅ JPA saveAll 완료: ${count}건, ${duration}ms")
         log.info("   처리량: ${String.format("%.2f", count * 1000.0 / duration)} records/sec")
-        
+
         return InsertResult.of("JPA saveAll", count, duration)
     }
-    
-    // ==========================================
-    // 방법 2: JdbcTemplate batchUpdate
-    // ==========================================
-    
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun insertWithJdbcBatch(count: Int): InsertResult {
         log.info("========== JdbcTemplate batchUpdate 테스트 시작 (${count}건) ==========")
-        
+
         val transactions = generateTestTransactions(count, "JDBC")
-        
+
         val sql = """
             INSERT INTO transaction (
                 approve_date_time, amount, business_no, pos_transaction_no,
@@ -104,9 +89,9 @@ class BulkInsertExperimentService(
                 paper_receipt_print_yn
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.trimIndent()
-        
+
         val start = System.currentTimeMillis()
-        
+
         jdbcTemplate.batchUpdate(sql, object : BatchPreparedStatementSetter {
             override fun setValues(ps: PreparedStatement, i: Int) {
                 val tx = transactions[i]
@@ -130,33 +115,28 @@ class BulkInsertExperimentService(
                 ps.setTimestamp(18, tx.cashReceiptCancelDateTime?.let { Timestamp.valueOf(it) })
                 ps.setObject(19, tx.paperReceiptPrintYn)
             }
-            
+
             override fun getBatchSize() = transactions.size
         })
-        
+
         val duration = System.currentTimeMillis() - start
-        
+
         log.info("✅ JdbcTemplate batchUpdate 완료: ${count}건, ${duration}ms")
         log.info("   처리량: ${String.format("%.2f", count * 1000.0 / duration)} records/sec")
-        
+
         return InsertResult.of("JdbcTemplate batchUpdate", count, duration)
     }
-    
-    // ==========================================
-    // 방법 3: Native Bulk Insert
-    // ==========================================
-    
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun insertWithNativeBulk(count: Int): InsertResult {
         log.info("========== Native Bulk Insert 테스트 시작 (${count}건) ==========")
-        
+
         val transactions = generateTestTransactions(count, "NATIVE")
-        
-        // MySQL max_allowed_packet 고려하여 청크 분할
+
         val chunkSize = 500
-        
+
         val start = System.currentTimeMillis()
-        
+
         transactions.chunked(chunkSize).forEach { chunk ->
             val values = chunk.joinToString(",\n") { tx ->
                 """(
@@ -181,7 +161,7 @@ class BulkInsertExperimentService(
                     ${tx.paperReceiptPrintYn}
                 )""".trimIndent()
             }
-            
+
             val sql = """
                 INSERT INTO transaction (
                     approve_date_time, amount, business_no, pos_transaction_no,
@@ -194,37 +174,31 @@ class BulkInsertExperimentService(
                     paper_receipt_print_yn
                 ) VALUES $values
             """.trimIndent()
-            
+
             entityManager.createNativeQuery(sql).executeUpdate()
         }
-        
+
         val duration = System.currentTimeMillis() - start
-        
+
         log.info("✅ Native Bulk Insert 완료: ${count}건, ${duration}ms")
         log.info("   처리량: ${String.format("%.2f", count * 1000.0 / duration)} records/sec")
-        
+
         return InsertResult.of("Native Bulk Insert", count, duration)
     }
-    
-    // ==========================================
-    // 전체 비교 실행
-    // ==========================================
-    
+
     fun compareAll(counts: List<Int> = DEFAULT_TEST_COUNTS): ExperimentSummary {
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
         log.info("║  🧪 Bulk Insert 성능 비교 실험 시작                         ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
-        
+
         val results = mutableMapOf<Int, List<InsertResult>>()
         val rankings = mutableMapOf<Int, List<RankingEntry>>()
-        
+
         counts.forEach { count ->
             log.info(">>> ${count}건 테스트 시작")
 
-            // self를 통해 프록시 호출 - @Transactional 적용됨
-            // (Lab 01 self-invocation 문제 해결)
             self.cleanupTestData()
             val saveAllResult = self.insertWithSaveAll(count)
 
@@ -237,7 +211,6 @@ class BulkInsertExperimentService(
             val resultList = listOf(saveAllResult, jdbcResult, nativeResult)
             results[count] = resultList
 
-            // 순위 계산
             val sorted = resultList.sortedBy { it.durationMs }
             val fastestTime = sorted.first().durationMs
 
@@ -253,26 +226,23 @@ class BulkInsertExperimentService(
                 )
             }
 
-            // 테스트 데이터 정리
             self.cleanupTestData()
 
             log.info(">>> ${count}건 테스트 완료\n")
         }
-        
-        // 결과 출력
+
         printSummary(rankings)
-        
+
         return ExperimentSummary(
             testCounts = counts,
             results = results,
             rankings = rankings
         )
     }
-    
+
     fun compare(count: Int): List<InsertResult> {
         log.info(">>> ${count}건 비교 테스트")
 
-        // self를 통해 프록시 호출 - @Transactional 적용됨
         self.cleanupTestData()
         val saveAllResult = self.insertWithSaveAll(count)
 
@@ -286,11 +256,7 @@ class BulkInsertExperimentService(
 
         return listOf(saveAllResult, jdbcResult, nativeResult).sortedBy { it.durationMs }
     }
-    
-    // ==========================================
-    // 유틸리티 메서드
-    // ==========================================
-    
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun cleanupTestData(): Int {
         val deleted = entityManager.createQuery(
@@ -298,18 +264,18 @@ class BulkInsertExperimentService(
         )
             .setParameter("prefix", "$TEST_PREFIX%")
             .executeUpdate()
-        
+
         if (deleted > 0) {
             log.info("🧹 테스트 데이터 ${deleted}건 삭제")
         }
-        
+
         return deleted
     }
-    
+
     private fun generateTestTransactions(count: Int, methodTag: String): List<Transaction> {
         val now = LocalDateTime.now()
         val batchId = UUID.randomUUID().toString().take(8)
-        
+
         return (1..count).map { i ->
             Transaction(
                 approveDateTime = now.minusSeconds(i.toLong()),
@@ -325,17 +291,17 @@ class BulkInsertExperimentService(
             )
         }
     }
-    
+
     private fun escapeSql(value: String): String {
         return value.replace("'", "''")
     }
-    
+
     private fun printSummary(rankings: Map<Int, List<RankingEntry>>) {
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
         log.info("║  📊 실험 결과 요약                                          ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
-        
+
         rankings.forEach { (count, ranking) ->
             log.info("")
             log.info("[ ${count}건 결과 ]")
@@ -346,7 +312,7 @@ class BulkInsertExperimentService(
                 log.info("      $bar")
             }
         }
-        
+
         log.info("")
         log.info("════════════════════════════════════════════════════════════")
     }

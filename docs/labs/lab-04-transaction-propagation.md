@@ -193,11 +193,11 @@ Spring의 `@Transactional` 어노테이션에서 가장 많이 사용되는 두 
 
 | 파일 | 설명 |
 |------|------|
-| `PropagationExperimentService.kt` | 9개 실험 오케스트레이터 |
-| `PropagationExperimentInnerService.kt` | Inner 서비스 빈 (프록시 기반 호출) |
-| `PropagationResult.kt` | 실험 결과 DTO |
-| `ExperimentController.kt` | REST 엔드포인트 |
-| `TransactionRepository.kt` | 검증용 쿼리 메서드 |
+| `labs04/PropagationExperimentService.kt` | 9개 실험 오케스트레이터 |
+| `labs04/PropagationExperimentInnerService.kt` | Inner 서비스 빈 (프록시 기반 호출) |
+| `labs04/dto/PropagationResult.kt` | 실험 결과 DTO |
+| `labs04/Lab04Controller.kt` | REST 엔드포인트 |
+| `repository/TransactionRepository.kt` | 검증용 쿼리 메서드 |
 
 ## 선수 학습
 
