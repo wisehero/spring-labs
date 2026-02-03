@@ -11,7 +11,7 @@ Spring Framework의 숨겨진 동작들을 직접 테스트하고 검증하는 �
 | 2 | [@Transactional(readOnly=true) 실제 효과](docs/labs/lab-02-transactional-readonly.md) | ⭐⭐ | ✅ 완료 |
 | 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](docs/labs/lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
 | 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](docs/labs/lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
-| 5 | Kotlin data class + JPA 함정 | ⭐⭐ | 📋 예정 |
+| 5 | [Optimistic Lock vs Pessimistic Lock](docs/labs/lab-05-optimistic-pessimistic-lock.md) | ⭐⭐⭐ | ✅ 완료 |
 | 6 | Bean 순환 참조 해결 방법들 | ⭐⭐ | 📋 예정 |
 
 ## 실험 환경
@@ -36,7 +36,12 @@ docker-compose up -d
 ### 2. API 호출
 IntelliJ HTTP Client 사용:
 ```
-src/main/resources/http/experiment-api.http
+src/main/resources/http/
+├── lab01-self-invocation.http
+├── lab02-readonly.http
+├── lab03-bulk-insert.http
+├── lab04-propagation.http
+└── lab05-lock.http
 ```
 
 또는 curl:
@@ -82,9 +87,15 @@ src/main/kotlin/com/wisehero/springlabs/
 │   ├── Lab03Controller.kt
 │   ├── BulkInsertExperimentService.kt
 │   └── dto/BulkInsertResult.kt
-└── labs04/                                        # Lab 04: Transaction Propagation
-    ├── Lab04Controller.kt
-    ├── PropagationExperimentService.kt
-    ├── PropagationExperimentInnerService.kt
-    └── dto/PropagationResult.kt
+├── labs04/                                        # Lab 04: Transaction Propagation
+│   ├── Lab04Controller.kt
+│   ├── PropagationExperimentService.kt
+│   ├── PropagationExperimentInnerService.kt
+│   └── dto/PropagationResult.kt
+└── labs05/                                        # Lab 05: Lock
+    ├── Lab05Controller.kt
+    ├── LockExperimentService.kt
+    └── dto/
+        ├── LockResult.kt
+        └── PerformanceComparison.kt
 ```

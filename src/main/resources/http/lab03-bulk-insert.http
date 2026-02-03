@@ -1,0 +1,77 @@
+### ==========================================
+### Lab 03: Bulk Insert 성능 비교
+### ==========================================
+### saveAll vs JdbcTemplate vs Native Bulk Insert
+
+### ------------------------------------------
+### 🏆 전체 비교 (100, 1000, 10000건 한 번에)
+### ------------------------------------------
+### ⚠️ 10000건 포함되어 시간이 좀 걸림!
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/compare-all
+Accept: application/json
+
+### ------------------------------------------
+### 100건 비교
+### ------------------------------------------
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/compare/100
+Accept: application/json
+
+### ------------------------------------------
+### 1000건 비교
+### ------------------------------------------
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/compare/1000
+Accept: application/json
+
+### ------------------------------------------
+### 10000건 비교
+### ------------------------------------------
+### ⚠️ 시간이 좀 걸릴 수 있음!
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/compare/10000
+Accept: application/json
+
+### ------------------------------------------
+### 개별 테스트: JPA saveAll
+### ------------------------------------------
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/saveall/100
+Accept: application/json
+
+###
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/saveall/1000
+Accept: application/json
+
+### ------------------------------------------
+### 개별 테스트: JdbcTemplate batchUpdate
+### ------------------------------------------
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/jdbc-batch/100
+Accept: application/json
+
+###
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/jdbc-batch/1000
+Accept: application/json
+
+### ------------------------------------------
+### 개별 테스트: Native Bulk Insert
+### ------------------------------------------
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/native-bulk/100
+Accept: application/json
+
+###
+
+POST http://localhost:8080/api/v1/experiments/bulk-insert/native-bulk/1000
+Accept: application/json
+
+### ------------------------------------------
+### 테스트 데이터 정리
+### ------------------------------------------
+
+DELETE http://localhost:8080/api/v1/experiments/bulk-insert/cleanup
+Accept: application/json

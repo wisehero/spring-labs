@@ -1,0 +1,43 @@
+### ==========================================
+### Lab 02: @Transactional(readOnly=true) 실제 효과
+### ==========================================
+
+### ------------------------------------------
+### 실험 2-A: readOnly 상태 확인
+### ------------------------------------------
+### FlushMode, DefaultReadOnly 확인
+
+GET http://localhost:8080/api/v1/experiments/readonly-status
+Accept: application/json
+
+### ------------------------------------------
+### 실험 2-B: readOnly에서 수정 시도
+### ------------------------------------------
+### {id}를 실제 transaction ID로 변경
+
+GET http://localhost:8080/api/v1/experiments/readonly-modify/1
+Accept: application/json
+
+### ------------------------------------------
+### 실험 2-C: readOnly 성능 비교
+### ------------------------------------------
+### readOnly=true vs false 성능 차이
+
+GET http://localhost:8080/api/v1/experiments/readonly-performance
+Accept: application/json
+
+### ------------------------------------------
+### 실험 2-D: readOnly에서 persist 시도
+### ------------------------------------------
+### ⚠️ 주의: 테스트 데이터가 생성될 수 있음!
+
+GET http://localhost:8080/api/v1/experiments/readonly-persist
+Accept: application/json
+
+### ------------------------------------------
+### 🧪 모든 실험 한 번에 실행
+### ------------------------------------------
+### 콘솔 로그를 확인하세요!
+
+GET http://localhost:8080/api/v1/experiments/all
+Accept: application/json

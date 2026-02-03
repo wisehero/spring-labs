@@ -1,0 +1,38 @@
+### ==========================================
+### Lab 05: Optimistic Lock vs Pessimistic Lock
+### ==========================================
+
+### 실험 5-1: 락 없음 - Lost Update
+### ⚠️ 100개 스레드가 동시에 재고 차감
+POST http://localhost:8080/api/v1/experiments/lock/5-1/no-lock-lost-update
+
+### ---
+
+### 실험 5-2: Optimistic Lock (@Version) - 충돌 감지
+POST http://localhost:8080/api/v1/experiments/lock/5-2/optimistic-lock
+
+### ---
+
+### 실험 5-3: Optimistic Lock + Retry - 재시도로 전부 성공
+POST http://localhost:8080/api/v1/experiments/lock/5-3/optimistic-retry
+
+### ---
+
+### 실험 5-4: Pessimistic Lock (SELECT FOR UPDATE) - 순차 처리
+POST http://localhost:8080/api/v1/experiments/lock/5-4/pessimistic-lock
+
+### ---
+
+### 실험 5-5: 성능 비교 - Optimistic vs Pessimistic
+### ⚠️ 10 + 100 스레드 각각 테스트하므로 시간이 걸림
+POST http://localhost:8080/api/v1/experiments/lock/5-5/performance-comparison
+
+### ---
+
+### 실험 5-6: 데드락 시나리오 - 역순 잠금
+POST http://localhost:8080/api/v1/experiments/lock/5-6/deadlock
+
+### ---
+
+### Lab 05 테스트 데이터 정리
+DELETE http://localhost:8080/api/v1/experiments/lock/cleanup
