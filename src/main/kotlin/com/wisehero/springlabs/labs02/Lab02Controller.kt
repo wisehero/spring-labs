@@ -35,17 +35,18 @@ class Lab02Controller(
 
     /**
      * 실험 2-B: readOnly에서 수정 시도
-     * GET /api/v1/experiments/readonly-modify/{id}
+     * GET /api/v1/experiments/readonly-modify
      */
-    @GetMapping("/readonly-modify/{id}")
-    fun testReadOnlyModify(@PathVariable id: Long): ResponseEntity<ApiResponse<Map<String, Any?>>> {
+    @GetMapping("/readonly-modify")
+    fun testReadOnlyModify(): ResponseEntity<ApiResponse<Map<String, Any?>>> {
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
         log.info("║  실험 2-B: readOnly에서 수정 시도                            ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
 
-        val result = readOnlyExperimentService.experimentReadOnlyWithModification(id)
+        val testId = readOnlyExperimentService.setupTestTransaction()
+        val result = readOnlyExperimentService.experimentReadOnlyWithModification(testId)
 
         return ResponseEntity.ok(ApiResponse.success(result, "readOnly 수정 테스트"))
     }
@@ -61,6 +62,8 @@ class Lab02Controller(
         log.info("║  실험 2-C: readOnly 성능 비교                               ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
+
+        readOnlyExperimentService.warmupQuery()
 
         val readOnlyResult = readOnlyExperimentService.experimentReadOnlyPerformance()
         val writableResult = readOnlyExperimentService.experimentWritablePerformance()
@@ -110,6 +113,8 @@ class Lab02Controller(
         log.info("║  실험 2-E: readOnly 메모리 사용량 비교                       ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
+
+        readOnlyExperimentService.warmupQuery()
 
         val readOnlyResult = readOnlyExperimentService.experimentReadOnlyMemory()
         val writableResult = readOnlyExperimentService.experimentWritableMemory()

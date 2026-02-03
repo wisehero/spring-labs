@@ -69,6 +69,20 @@ class ReadOnlyExperimentService(
         return result
     }
 
+    @Transactional
+    fun setupTestTransaction(): Long {
+        val tx = Transaction(
+            approveDateTime = LocalDateTime.now(),
+            amount = BigDecimal("50000"),
+            businessNo = "READONLY-TEST",
+            posTransactionNo = "READONLY-POS-001",
+            paymentTransactionGuidNo = "readonly-guid-001",
+            spareTransactionGuidNo = "readonly-spare-001",
+            transactionState = "APPROVED"
+        )
+        return transactionRepository.save(tx).id!!
+    }
+
     @Transactional(readOnly = true)
     fun experimentReadOnlyWithModification(transactionId: Long): Map<String, Any?> {
         log.info("========== 실험 2-B: readOnly에서 수정 시도 ==========")
@@ -83,30 +97,48 @@ class ReadOnlyExperimentService(
         }
 
         val originalAmount = transaction.amount
-        log.info("📦 원본 금액: $originalAmount")
+        log.info("원본 금액: $originalAmount")
 
         result["original_amount"] = originalAmount
 
         val session = entityManager.unwrap(Session::class.java)
         val flushModeBefore = session.hibernateFlushMode
 
-        log.info("🔧 수정 전 FlushMode: $flushModeBefore")
+        log.info("수정 전 FlushMode: $flushModeBefore")
         result["flush_mode_before"] = flushModeBefore.toString()
 
         try {
-            log.info("⚠️ 수동 flush 시도...")
-            entityManager.flush()
-            result["manual_flush"] = "성공 (변경사항 없어서)"
-            log.info("✅ flush 성공 (변경사항이 없어서 성공)")
+            log.info("JPQL UPDATE 시도 (readOnly 트랜잭션에서)...")
+            val updated = entityManager.createQuery(
+                "UPDATE Transaction t SET t.amount = :newAmount WHERE t.id = :id"
+            )
+                .setParameter("newAmount", BigDecimal("99999.99"))
+                .setParameter("id", transactionId)
+                .executeUpdate()
+            result["jpql_update"] = "성공 (${updated}건)"
+            log.info("JPQL UPDATE 성공: ${updated}건")
         } catch (e: Exception) {
-            result["manual_flush"] = "실패: ${e.message}"
-            log.error("❌ flush 실패: ${e.message}")
+            result["jpql_update"] = "실패: ${e.javaClass.simpleName}"
+            log.info("JPQL UPDATE 실패: ${e.javaClass.simpleName} - ${e.message}")
         }
 
+        entityManager.clear()
+        val dbAmount = transactionRepository.findById(transactionId).orElse(null)?.amount
+        result["db_amount_after"] = dbAmount
+        result["amount_changed"] = dbAmount != originalAmount
+        log.info("DB 재조회 금액: $dbAmount (원본: $originalAmount)")
+
         log.info("========== 실험 2-B: 결과 ==========")
-        log.info("💡 readOnly=true여도 flush()는 호출 가능! (변경사항이 없으면)")
+        log.info("readOnly=true -> FlushMode=MANUAL, JPQL UPDATE 시도 시 TransactionRequiredException 또는 무시")
 
         return result
+    }
+
+    @Transactional(readOnly = true)
+    fun warmupQuery() {
+        log.info("[워밍업] 캐시 워밍업 쿼리 실행...")
+        transactionRepository.findAll()
+        log.info("[워밍업] 완료")
     }
 
     @Transactional(readOnly = true)
@@ -211,93 +243,70 @@ class ReadOnlyExperimentService(
     @Transactional(readOnly = true)
     fun experimentReadOnlyMemory(): Map<String, Any?> {
         log.info("========== 실험 2-E: 메모리 사용량 (readOnly=true) ==========")
-
-        val result = mutableMapOf<String, Any?>()
-        val runtime = Runtime.getRuntime()
-
-        entityManager.clear()
-
-        System.gc()
-        Thread.sleep(100)
-        val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
-
-        val transactions = transactionRepository.findAll()
-
-        val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
-        val memoryDelta = memoryAfter - memoryBefore
-
-        val session = entityManager.unwrap(Session::class.java)
-        val stats = session.statistics
-
-        val memoryBeforeMb = String.format("%.2f", memoryBefore / 1024.0 / 1024.0)
-        val memoryAfterMb = String.format("%.2f", memoryAfter / 1024.0 / 1024.0)
-        val memoryDeltaMb = String.format("%.2f", memoryDelta / 1024.0 / 1024.0)
-
-        log.info("📊 엔티티 수: ${transactions.size}")
-        log.info("📊 로드 전 메모리: ${memoryBeforeMb}MB")
-        log.info("📊 로드 후 메모리: ${memoryAfterMb}MB")
-        log.info("📊 메모리 증가량: ${memoryDeltaMb}MB")
-        log.info("📊 FlushMode: ${session.hibernateFlushMode}")
-        log.info("📊 Session DefaultReadOnly: ${session.isDefaultReadOnly}")
-        log.info("📊 Session Entity Count: ${stats.entityCount}")
-
-        result["readOnly"] = true
-        result["entity_count"] = transactions.size
-        result["memory_before_mb"] = memoryBeforeMb.toDouble()
-        result["memory_after_mb"] = memoryAfterMb.toDouble()
-        result["memory_delta_mb"] = memoryDeltaMb.toDouble()
-        result["flush_mode"] = session.hibernateFlushMode.toString()
-        result["session_default_readonly"] = session.isDefaultReadOnly
-        result["entity_count_in_session"] = stats.entityCount
-
-        log.info("💡 readOnly=true: 스냅샷 저장 생략 → 메모리 절약")
-
-        return result
+        return measureMemory(readOnly = true)
     }
 
     @Transactional(readOnly = false)
     fun experimentWritableMemory(): Map<String, Any?> {
         log.info("========== 실험 2-E: 메모리 사용량 (readOnly=false) ==========")
+        return measureMemory(readOnly = false)
+    }
 
+    private fun measureMemory(readOnly: Boolean): Map<String, Any?> {
         val result = mutableMapOf<String, Any?>()
         val runtime = Runtime.getRuntime()
 
-        entityManager.clear()
+        val session = entityManager.unwrap(Session::class.java)
 
+        // 명시적으로 session.defaultReadOnly 설정
+        // Spring Boot 4 / Hibernate 7에서 @Transactional(readOnly=true)가 자동 설정하지 않으며,
+        // OSIV로 인해 이전 트랜잭션의 세션 상태가 유지될 수 있으므로 양쪽 모두 명시적으로 설정
+        session.isDefaultReadOnly = readOnly
+
+        log.info("session_default_readonly: ${session.isDefaultReadOnly}")
+        log.info("FlushMode: ${session.hibernateFlushMode}")
+
+        // GC 2회 + 대기로 측정 안정화
         System.gc()
-        Thread.sleep(100)
+        System.gc()
+        Thread.sleep(200)
         val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
 
         val transactions = transactionRepository.findAll()
 
+        // findAll 직후 측정 (GC 없이)
         val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
         val memoryDelta = memoryAfter - memoryBefore
 
-        val session = entityManager.unwrap(Session::class.java)
         val stats = session.statistics
+
+        // 엔티티 단위 readOnly 상태 확인 (첫 번째 엔티티)
+        val firstEntityReadOnly = if (transactions.isNotEmpty()) {
+            session.isReadOnly(transactions.first())
+        } else null
 
         val memoryBeforeMb = String.format("%.2f", memoryBefore / 1024.0 / 1024.0)
         val memoryAfterMb = String.format("%.2f", memoryAfter / 1024.0 / 1024.0)
         val memoryDeltaMb = String.format("%.2f", memoryDelta / 1024.0 / 1024.0)
 
-        log.info("📊 엔티티 수: ${transactions.size}")
-        log.info("📊 로드 전 메모리: ${memoryBeforeMb}MB")
-        log.info("📊 로드 후 메모리: ${memoryAfterMb}MB")
-        log.info("📊 메모리 증가량: ${memoryDeltaMb}MB")
-        log.info("📊 FlushMode: ${session.hibernateFlushMode}")
-        log.info("📊 Session DefaultReadOnly: ${session.isDefaultReadOnly}")
-        log.info("📊 Session Entity Count: ${stats.entityCount}")
+        log.info("엔티티 수: ${transactions.size}")
+        log.info("로드 전 메모리: ${memoryBeforeMb}MB")
+        log.info("로드 후 메모리: ${memoryAfterMb}MB")
+        log.info("메모리 증가량: ${memoryDeltaMb}MB")
+        log.info("FlushMode: ${session.hibernateFlushMode}")
+        log.info("Session DefaultReadOnly: ${session.isDefaultReadOnly}")
+        log.info("Entity ReadOnly: $firstEntityReadOnly")
+        log.info("Session Entity Count: ${stats.entityCount}")
 
-        result["readOnly"] = false
+        result["readOnly"] = readOnly
         result["entity_count"] = transactions.size
         result["memory_before_mb"] = memoryBeforeMb.toDouble()
         result["memory_after_mb"] = memoryAfterMb.toDouble()
         result["memory_delta_mb"] = memoryDeltaMb.toDouble()
         result["flush_mode"] = session.hibernateFlushMode.toString()
         result["session_default_readonly"] = session.isDefaultReadOnly
+        result["entity_readonly"] = firstEntityReadOnly
         result["entity_count_in_session"] = stats.entityCount
-
-        log.info("💡 readOnly=false: 스냅샷 저장 → 더티체킹용 메모리 추가 사용")
 
         return result
     }
