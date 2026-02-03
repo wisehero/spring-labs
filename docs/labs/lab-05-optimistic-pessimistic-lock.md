@@ -2,7 +2,7 @@
 
 ## 개요
 
-데이터베이스 동시성 제어의 두 가지 핵심 전략인 **낙관적 락(Optimistic Lock)**과 **비관적 락(Pessimistic Lock)**을 Product 엔티티의 재고(stock) 관리 시나리오로 비교 실험합니다.
+데이터베이스 동시성 제어의 두 가지 핵심 전략인 **낙관적 락(Optimistic Lock)** 과 **비관적 락(Pessimistic Lock)** 을 Product 엔티티의 재고(stock) 관리 시나리오로 비교 실험합니다.
 
 ### 왜 중요한가?
 
