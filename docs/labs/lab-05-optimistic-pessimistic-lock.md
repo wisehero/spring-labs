@@ -150,7 +150,7 @@ Thread-B: stock=99, flush → UPDATE ... SET stock=99, version=1 WHERE id=1 AND 
 ### 실험 5-3: Optimistic Lock + Retry
 
 - **엔드포인트**: `POST /api/v1/experiments/lock/5-3/optimistic-retry`
-- **동작**: OptimisticLockException 시 최대 50회 재시도
+- **동작**: OptimisticLockException 시 최대 200회 재시도 (지수 백오프)
 - **내부 동작 원리**:
 
 ```kotlin
@@ -161,13 +161,28 @@ while (retries < maxRetries) {
         break  // 성공!
     } catch (e: ObjectOptimisticLockingFailureException) {
         retries++
-        Thread.sleep(random(1..3))  // 짧은 백오프
+        // 지수 백오프: 2^min(retries,6) + 랜덤 jitter (최대 ~74ms)
+        val backoff = 2.0.pow(min(retries, 6)).toLong() + (1..10).random().toLong()
+        Thread.sleep(backoff)
         // 재시도 → 새 트랜잭션이 최신 version을 읽어옴
     }
 }
 ```
 
 **핵심**: 재시도는 반드시 **새 트랜잭션**에서 해야 합니다. 같은 트랜잭션의 EntityManager는 이미 stale 상태이므로 `clear()` 없이는 같은 version을 읽게 됩니다. `REQUIRES_NEW`가 새 EntityManager/PersistenceContext를 사용하므로 자연스럽게 해결됩니다.
+
+**왜 재시도 횟수와 백오프 전략이 중요한가?**
+
+100개 스레드가 동시에 경합하면 매 라운드에 1개만 성공합니다. 고정 백오프(1~3ms)로는 모든 스레드가 다시 동시에 충돌하므로, maxRetries=50이면 약 50개만 성공하고 나머지는 한도를 초과합니다. **지수 백오프**를 적용하면 재시도 간격이 점차 벌어져 충돌이 분산되고, 대부분 10회 이내에 성공합니다.
+
+| 재시도 횟수 | 백오프 시간 |
+|-----------|-----------|
+| 1회차 | ~3ms |
+| 2회차 | ~5ms |
+| 3회차 | ~9ms |
+| 4회차 | ~17ms |
+| 5회차 | ~33ms |
+| 6회차 이후 | ~74ms (상한) |
 
 - **예상 결과**: `finalStock = 0`, `retryCount > 0`
 - **의미**: Optimistic Lock + Retry는 경합이 적을 때 효과적이며, 경합이 심하면 재시도가 폭주할 수 있음
@@ -235,14 +250,36 @@ t=50ms: Thread-1이 A 잠금 요청 → Thread-0이 보유 중이므로 대기
 **MySQL InnoDB 데드락 감지:**
 ```
 1. InnoDB는 wait-for graph (대기 그래프)를 유지
-2. 새로운 잠금 요청이 대기 상태가 되면 그래프에 추가
+2. 새로운 잠금 요청이 대기 상태가 되면 그래프에 간선 추가
 3. 그래프에서 cycle 감지 시 → 데드락 판정
-4. 비용이 적은 트랜잭션을 victim으로 선택하여 강제 롤백
-5. victim 트랜잭션은 "Deadlock found when trying to get lock" 에러 수신
-6. 살아남은 트랜잭션은 정상 진행
+4. victim(희생자) 선택 → 강제 롤백
+5. victim은 "Deadlock found when trying to get lock" 에러 수신
+6. 살아남은 트랜잭션은 대기가 풀리고 정상 진행
 ```
 
 `innodb_deadlock_detect = ON` (기본값)이면 즉시 감지합니다. `innodb_lock_wait_timeout`(기본 50초)까지 기다리지 않습니다.
+
+**Victim 선택 기준: "비용이 적은 트랜잭션을 롤백한다"**
+
+InnoDB는 데드락에 걸린 트랜잭션 중 **롤백 비용이 가장 적은 것**을 victim으로 선택합니다. 비용의 기준은 **undo log 크기** — 즉 해당 트랜잭션이 지금까지 변경(INSERT/UPDATE/DELETE)한 row 수에 대응하는 undo 레코드 수(`trx->undo_no`)입니다.
+
+```
+예시:
+  트랜잭션 A: 1,000건 INSERT 수행 중 → undo log 큼 → 유지
+  트랜잭션 B: 1건 UPDATE 수행 중    → undo log 작음 → 롤백 (victim)
+
+이유: 1,000건을 되돌리는 것보다 1건을 되돌리는 것이 훨씬 빠르기 때문
+```
+
+| 항목 | 설명 |
+|------|------|
+| 비교 대상 | `trx->undo_no` (트랜잭션이 수정한 row 수) |
+| 선택 기준 | undo log가 **작은 쪽**이 victim |
+| 선택 이유 | 롤백할 데이터가 적어 **복구 비용이 낮음** |
+| victim의 결과 | 트랜잭션 즉시 롤백 + `ER_LOCK_DEADLOCK` 에러 반환 |
+| 생존자의 결과 | 대기가 풀리고 잠금 획득 후 정상 진행 |
+
+> **참고**: `innodb_deadlock_detect = OFF`로 비활성화하면 데드락 감지를 하지 않고, `innodb_lock_wait_timeout`(기본 50초)이 만료될 때까지 기다린 후 타임아웃 에러를 발생시킵니다. 고부하 환경에서 데드락 감지 자체의 오버헤드가 클 때 사용하는 옵션입니다.
 
 - **예상 결과**: 데드락 1건 이상 발생, 하나의 트랜잭션이 강제 롤백
 - **의미**: 비관적 락 사용 시 잠금 순서를 일관되게 유지해야 데드락을 예방할 수 있음

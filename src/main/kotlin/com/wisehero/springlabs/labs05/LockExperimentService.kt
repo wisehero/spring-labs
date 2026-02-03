@@ -20,6 +20,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.pow
+import kotlin.math.min
 
 /**
  * ==========================================
@@ -236,11 +238,11 @@ class LockExperimentService(
         val totalRetryCount = AtomicInteger(0)
 
         log.info("[5-3] 상품 생성: id=$productId, stock=$initialStock, threads=$threadCount")
-        log.info("[5-3] Optimistic Lock + Retry (최대 50회)")
+        log.info("[5-3] Optimistic Lock + Retry (최대 200회, 지수 백오프)")
 
         val (successCount, failureCount, durationMs) = runConcurrentTest(threadCount) { threadIdx ->
             var retries = 0
-            val maxRetries = 50
+            val maxRetries = 200
             while (retries < maxRetries) {
                 try {
                     self.decrementStockWithOptimisticLock(productId)
@@ -256,7 +258,9 @@ class LockExperimentService(
                         e is StaleObjectStateException ||
                         (e is TransactionSystemException && e.cause?.cause is StaleObjectStateException) -> {
                             retries++
-                            Thread.sleep((1..3).random().toLong()) // 짧은 백오프
+                            // 지수 백오프: 2^min(retries,6) + 랜덤 jitter (최대 ~74ms)
+                            val backoff = 2.0.pow(min(retries, 6)).toLong() + (1..10).random().toLong()
+                            Thread.sleep(backoff)
                         }
                         else -> throw e
                     }
@@ -280,8 +284,8 @@ class LockExperimentService(
             durationMs = durationMs,
             details = mapOf(
                 "productId" to productId,
-                "maxRetriesPerThread" to 50,
-                "retryBackoffMs" to "1-3ms random"
+                "maxRetriesPerThread" to 200,
+                "retryBackoffMs" to "exponential 2^min(retries,6) + jitter(1-10ms)"
             )
         )
     }
