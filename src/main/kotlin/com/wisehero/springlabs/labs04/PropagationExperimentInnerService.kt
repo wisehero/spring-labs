@@ -178,7 +178,7 @@ class PropagationExperimentInnerService(
         log.info("[OUTER - 4-4] 행 삽입 완료: ${businessNoPrefix}-OUTER")
 
         try {
-            innerWithRequiredAndThrow(businessNoPrefix)
+            self.innerWithRequiredAndThrow(businessNoPrefix)
         } catch (e: RuntimeException) {
             log.info("[OUTER - 4-4] Inner 예외 catch: ${e.message}")
             log.info("[OUTER - 4-4] 하지만 트랜잭션은 이미 rollback-only!")
@@ -197,7 +197,7 @@ class PropagationExperimentInnerService(
         transactionRepository.save(outerTx)
         log.info("[OUTER - 4-6] 행 삽입 완료: ${businessNoPrefix}-OUTER")
 
-        val innerResult = innerWithRequiresNewAndInsert(businessNoPrefix)
+        val innerResult = self.innerWithRequiresNewAndInsert(businessNoPrefix)
         log.info("[OUTER - 4-6] Inner REQUIRES_NEW 성공: $innerResult")
 
         log.info("[OUTER - 4-6] Outer 의도적 실패! Inner 데이터는 이미 커밋됨.")
@@ -211,7 +211,7 @@ class PropagationExperimentInnerService(
 
         var isRollbackOnly = false
         try {
-            innerWithRequiredAndThrow(businessNoPrefix)
+            self.innerWithRequiredAndThrow(businessNoPrefix)
         } catch (e: RuntimeException) {
             log.info("[OUTER - 4-7A] Inner 예외 catch: ${e.message}")
             isRollbackOnly = TransactionAspectSupport.currentTransactionStatus().isRollbackOnly
@@ -231,7 +231,7 @@ class PropagationExperimentInnerService(
         log.info("[OUTER - 4-7B] tx_name: $outerTxName")
         log.info("[OUTER - 4-7B] Inner 예외를 catch하지 않음 - 그대로 전파")
 
-        innerWithRequiredAndThrow(businessNoPrefix)
+        self.innerWithRequiredAndThrow(businessNoPrefix)
 
         return mapOf("outer_tx_name" to outerTxName)
     }
@@ -241,7 +241,7 @@ class PropagationExperimentInnerService(
         val outerTxName = TransactionSynchronizationManager.getCurrentTransactionName()
         log.info("[OUTER - 4-7C] tx_name: $outerTxName")
 
-        val innerResult = innerWithRequiredAndSetRollbackOnly()
+        val innerResult = self.innerWithRequiredAndSetRollbackOnly()
         log.info("[OUTER - 4-7C] Inner 정상 리턴: $innerResult")
 
         val isRollbackOnly = TransactionAspectSupport.currentTransactionStatus().isRollbackOnly

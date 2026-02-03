@@ -6,11 +6,11 @@ Spring Framework의 숨겨진 동작들을 직접 테스트하고 검증하는 �
 
 | # | 주제 | 난이도 | 상태 |
 |---|------|--------|------|
-| 0 | [Count Query 최적화 (46% 성능 향상)](./lab-00-count-query-optimization.md) | ⭐ | ✅ 완료 |
-| 1 | [@Transactional 자기 호출 함정](./lab-01-transactional-self-invocation.md) | ⭐ | ✅ 완료 |
-| 2 | [@Transactional(readOnly=true) 실제 효과](./lab-02-transactional-readonly.md) | ⭐⭐ | ✅ 완료 |
-| 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](./lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
-| 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](./lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
+| 0 | [Count Query 최적화 (46% 성능 향상)](docs/labs/lab-00-count-query-optimization.md) | ⭐ | ✅ 완료 |
+| 1 | [@Transactional 자기 호출 함정](docs/labs/lab-01-transactional-self-invocation.md) | ⭐ | ✅ 완료 |
+| 2 | [@Transactional(readOnly=true) 실제 효과](docs/labs/lab-02-transactional-readonly.md) | ⭐⭐ | ✅ 완료 |
+| 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](docs/labs/lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
+| 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](docs/labs/lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
 | 5 | Kotlin data class + JPA 함정 | ⭐⭐ | 📋 예정 |
 | 6 | Bean 순환 참조 해결 방법들 | ⭐⭐ | 📋 예정 |
 
