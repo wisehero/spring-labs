@@ -1,0 +1,42 @@
+### ==========================================
+### Lab 07: N+1 Problem
+### ==========================================
+
+### 실험 7-1: @OneToMany N+1 문제 관찰
+### Team 전체 조회 → 각 Team의 members 접근 → 1+N SQL 발생
+POST http://localhost:8080/api/v1/experiments/n-plus-one/7-1/basic-n-plus-one
+
+### ---
+
+### 실험 7-2: JPQL JOIN FETCH로 N+1 해결
+### JOIN FETCH로 Team + Member를 1 SQL로 조회
+POST http://localhost:8080/api/v1/experiments/n-plus-one/7-2/join-fetch
+
+### ---
+
+### 실험 7-3: @EntityGraph로 N+1 해결
+### @EntityGraph(attributePaths)로 LEFT JOIN 1 SQL 조회
+POST http://localhost:8080/api/v1/experiments/n-plus-one/7-3/entity-graph
+
+### ---
+
+### 실험 7-4: @ManyToOne N+1 문제 관찰 및 해결
+### Member → Team 방향에서도 N+1 발생 → JOIN FETCH로 해결
+POST http://localhost:8080/api/v1/experiments/n-plus-one/7-4/many-to-one-n-plus-one
+
+### ---
+
+### 실험 7-5: DTO Projection으로 N+1 회피
+### JPQL 생성자 표현식으로 필요 데이터만 1 SQL 조회
+POST http://localhost:8080/api/v1/experiments/n-plus-one/7-5/dto-projection
+
+### ---
+
+### 실험 7-6: MultipleBagFetchException과 순차 Fetch 해결
+### 2개 List 동시 JOIN FETCH → 예외 → 순차 fetch(2 SQL)로 해결
+POST http://localhost:8080/api/v1/experiments/n-plus-one/7-6/multiple-bag-fetch
+
+### ---
+
+### Lab 07 테스트 데이터 정리
+DELETE http://localhost:8080/api/v1/experiments/n-plus-one/cleanup

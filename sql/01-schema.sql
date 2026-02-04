@@ -27,3 +27,36 @@ CREATE TABLE IF NOT EXISTS transaction (
 
 
 show index from transaction;
+
+
+-- ==========================================
+-- Lab 07: N+1 Problem 실험용 테이블
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS team (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_team_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS member (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    team_id BIGINT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_member_name (name),
+    INDEX idx_member_team_id (team_id),
+    CONSTRAINT fk_member_team FOREIGN KEY (team_id) REFERENCES team (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS team_tag (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tag_name VARCHAR(100) NOT NULL,
+    team_id BIGINT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_team_tag_name (tag_name),
+    INDEX idx_team_tag_team_id (team_id),
+    CONSTRAINT fk_team_tag_team FOREIGN KEY (team_id) REFERENCES team (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
