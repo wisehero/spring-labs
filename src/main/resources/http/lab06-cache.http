@@ -1,0 +1,53 @@
+### ==========================================
+### Lab 06: Caffeine Cache 조회 성능 최적화
+### ==========================================
+
+### 실험 6-1: 캐시 없음 vs @Cacheable
+### 같은 Product를 100번 조회하여 SQL 횟수 비교
+POST http://localhost:8080/api/v1/experiments/cache/6-1/cache-vs-no-cache
+
+### ---
+
+### 실험 6-2: Cache Hit/Miss 통계
+### Caffeine recordStats()로 캐시 통계 수집
+POST http://localhost:8080/api/v1/experiments/cache/6-2/cache-statistics
+
+### ---
+
+### 실험 6-3: TTL 만료와 DB 재조회
+### ⚠️ 3.5초 대기 포함 (TTL 3초)
+POST http://localhost:8080/api/v1/experiments/cache/6-3/ttl-expiration
+
+### ---
+
+### 실험 6-4: Size-based Eviction
+### maxSize=5 캐시에 10개 삽입 후 퇴거 관찰
+POST http://localhost:8080/api/v1/experiments/cache/6-4/size-eviction
+
+### ---
+
+### 실험 6-5: @CacheEvict로 캐시 무효화
+POST http://localhost:8080/api/v1/experiments/cache/6-5/cache-evict
+
+### ---
+
+### 실험 6-6: @CachePut vs @CacheEvict
+### 두 캐시 갱신 전략의 SQL 횟수 비교
+POST http://localhost:8080/api/v1/experiments/cache/6-6/put-vs-evict
+
+### ---
+
+### 실험 6-7: Cache Stampede (Thundering Herd)
+### ⚠️ 100 스레드 동시 조회, 2.5초 대기 포함
+POST http://localhost:8080/api/v1/experiments/cache/6-7/cache-stampede
+
+### ---
+
+### 실험 6-8: 조건부 캐싱
+### unless="#result == null"로 null 캐싱 방지
+POST http://localhost:8080/api/v1/experiments/cache/6-8/conditional-caching
+
+### ---
+
+### Lab 06 테스트 데이터 정리
+DELETE http://localhost:8080/api/v1/experiments/cache/cleanup
