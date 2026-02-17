@@ -12,7 +12,8 @@ Spring Framework의 숨겨진 동작들을 직접 테스트하고 검증하는 �
 | 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](docs/labs/lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
 | 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](docs/labs/lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
 | 5 | [Optimistic Lock vs Pessimistic Lock](docs/labs/lab-05-optimistic-pessimistic-lock.md) | ⭐⭐⭐ | ✅ 완료 |
-| 6 | Bean 순환 참조 해결 방법들 | ⭐⭐ | 📋 예정 |
+| 6 | [Caffeine Cache 조회 성능 최적화](docs/labs/lab-06-caffeine-cache.md) | ⭐⭐ | ✅ 완료 |
+| 7 | [N+1 Problem](docs/labs/lab-07-n-plus-one.md) | ⭐⭐ | ✅ 완료 |
 
 ## 실험 환경
 
@@ -41,7 +42,9 @@ src/main/resources/http/
 ├── lab02-readonly.http
 ├── lab03-bulk-insert.http
 ├── lab04-propagation.http
-└── lab05-lock.http
+├── lab05-lock.http
+├── lab06-cache.http
+└── lab07-n-plus-one.http
 ```
 
 또는 curl:
@@ -92,10 +95,22 @@ src/main/kotlin/com/wisehero/springlabs/
 │   ├── PropagationExperimentService.kt
 │   ├── PropagationExperimentInnerService.kt
 │   └── dto/PropagationResult.kt
-└── labs05/                                        # Lab 05: Lock
-    ├── Lab05Controller.kt
-    ├── LockExperimentService.kt
+├── labs05/                                        # Lab 05: Lock
+│   ├── Lab05Controller.kt
+│   ├── LockExperimentService.kt
+│   └── dto/
+│       ├── LockResult.kt
+│       └── PerformanceComparison.kt
+├── labs06/                                        # Lab 06: Caffeine Cache
+│   ├── Lab06Controller.kt
+│   ├── CacheExperimentService.kt
+│   └── dto/
+│       ├── CacheResult.kt
+│       └── CachedProduct.kt
+└── labs07/                                        # Lab 07: N+1 Problem
+    ├── Lab07Controller.kt
+    ├── NplusOneExperimentService.kt
     └── dto/
-        ├── LockResult.kt
-        └── PerformanceComparison.kt
+        ├── NplusOneResult.kt
+        └── TeamMemberDto.kt
 ```

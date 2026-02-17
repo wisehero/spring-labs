@@ -272,6 +272,47 @@ GET /api/v1/transactions?transactionState=거래승인&totalElements=400254
 GET /api/v1/transactions?minAmount=10000&sortBy=amount&totalElements=400254
 ```
 
+### 4. 마지막 페이지에서 빈 결과
+
+```
+시나리오:
+1. 사용자 A가 1페이지 조회 → totalElements: 100, totalPages: 5 (size=20)
+2. 다른 사용자가 데이터 30건 삭제 → 실제 70건
+3. 사용자 A가 4페이지(offset=60) 요청 → 10건 반환 (정상)
+4. 사용자 A가 5페이지(offset=80) 요청 → 빈 결과! (실제 데이터는 70건뿐)
+→ UI에 "5페이지"가 존재하지만 내용이 비어있는 상태
+```
+
+**대응 방안:**
+- 빈 결과가 반환되면 클라이언트에서 `totalElements`를 리셋하고 첫 페이지부터 다시 조회
+- 또는 빈 결과 시 서버가 자동으로 카운트 쿼리를 재실행하여 갱신된 totalElements를 반환
+
+### 5. URL 공유 시 오래된 totalElements
+
+```
+시나리오:
+1. 사용자 A가 조회 → URL: /transactions?page=3&totalElements=400254
+2. 이 URL을 사용자 B에게 공유
+3. 사용자 B가 접속 → 실제 데이터는 500,000건으로 증가한 상태
+→ totalElements=400254가 그대로 사용되어 잘못된 페이지 수 표시
+```
+
+**대응 방안:**
+- `totalElements`를 URL 파라미터 대신 클라이언트 메모리(상태)에만 보관
+- 또는 URL에 포함하되 일정 시간이 지나면 무시하는 TTL 로직 추가
+
+### 6. Deep Pagination 문제는 별도
+
+이 최적화는 COUNT 쿼리만 스킵하며, OFFSET 기반 페이징의 근본 문제는 해결하지 않습니다:
+
+```sql
+-- OFFSET이 크면 데이터 쿼리 자체가 느려짐
+SELECT * FROM transaction WHERE ... ORDER BY id LIMIT 20 OFFSET 900000;
+-- → 900,020건을 읽고 900,000건을 버림!
+```
+
+대량 데이터에서 뒤쪽 페이지까지 자주 접근한다면 [Cursor 기반 페이징](#1-cursor-기반-페이징-keyset-pagination)을 검토하세요.
+
 ## 대안적 접근법
 
 ### 1. Cursor 기반 페이징 (Keyset Pagination)

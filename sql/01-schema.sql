@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS transaction (
     cash_receipt_approve_no VARCHAR(50),
     cash_receipt_approve_date_time DATETIME,
     cash_receipt_issue_type VARCHAR(20),
-    cash_receipt_auth_type VARCHAR(20),
+    cash_receipt_auth_type VARCHAR(30),
     cash_receipt_issue_no VARCHAR(50),
     cash_receipt_cancel_approve_no VARCHAR(50),
     cash_receipt_cancel_date_time DATETIME,

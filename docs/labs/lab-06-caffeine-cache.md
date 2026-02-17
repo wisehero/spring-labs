@@ -2,7 +2,7 @@
 
 ## 개요
 
-Spring Cache 추상화 + Caffeine을 활용한 로컬 캐시의 동작 원리와 성능 최적화를 8개 실험으로 검증한다.
+Spring Cache 추상화 + Caffeine을 활용한 로컬 캐시의 동작 원리와 성능 최적화를 8개 실험으로 검증합니다.
 
 ### 왜 캐시가 중요한가?
 
@@ -42,11 +42,11 @@ Spring Cache 추상화 + Caffeine을 활용한 로컬 캐시의 동작 원리와
 4. 결과 반환
 ```
 
-**핵심 포인트**: Cache HIT 시 **메서드 본문이 실행되지 않는다**. 따라서 DB 접근이 완전히 차단된다.
+**핵심 포인트**: Cache HIT 시 **메서드 본문이 실행되지 않습니다**. 따라서 DB 접근이 완전히 차단됩니다.
 
 ### Caffeine Window TinyLFU 알고리즘
 
-Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용한다:
+Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용합니다:
 
 ```
 새 항목 → [Admission Window (1%)] → [Probationary Segment] → [Protected Segment]
@@ -84,7 +84,7 @@ Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용한다:
 | `stampedeCache` | 실험 6-7: Stampede | - | 2초 | O |
 | `conditionalCache` | 실험 6-8: 조건부 | 100 | 5분 | O |
 
-`SimpleCacheManager`로 각 `CaffeineCache` 인스턴스를 개별 등록하여, 캐시별 독립적인 정책을 적용한다.
+`SimpleCacheManager`로 각 `CaffeineCache` 인스턴스를 개별 등록하여, 캐시별 독립적인 정책을 적용합니다.
 
 ---
 
@@ -176,7 +176,7 @@ TTL 만료 후 get() 호출:
   4. DB 조회 → 새 값 캐시에 저장 (writeTime 갱신)
 ```
 
-**주의**: Caffeine의 만료는 **lazy** 방식이다. 백그라운드 스레드가 아니라 **다음 접근 시점**에 만료를 확인한다.
+**주의**: Caffeine의 만료는 **lazy** 방식입니다. 백그라운드 스레드가 아니라 **다음 접근 시점**에 만료를 확인합니다.
 (단, `Caffeine.scheduler()`를 설정하면 능동적 만료도 가능)
 
 - **예상 결과**: 만료 전 SQL 0회, 3.5초 대기 후 SQL 1회
@@ -360,7 +360,7 @@ fun someMethod() {
 }
 ```
 
-Spring AOP는 **CGLIB 프록시**를 통해 동작하므로, `this.method()`로 호출하면 프록시를 우회하여 `@Cacheable`이 적용되지 않는다.
+Spring AOP는 **CGLIB 프록시**를 통해 동작하므로, `this.method()`로 호출하면 프록시를 우회하여 `@Cacheable`이 적용되지 않습니다.
 
 ### 실무 적용 가이드
 
