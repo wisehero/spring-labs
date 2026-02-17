@@ -13,9 +13,9 @@ Accept: application/json
 ### ------------------------------------------
 ### 실험 2-B: readOnly에서 수정 시도
 ### ------------------------------------------
-### {id}를 실제 transaction ID로 변경
+### 내부에서 테스트 데이터를 생성해 실행
 
-GET http://localhost:8080/api/v1/experiments/readonly-modify/1
+GET http://localhost:8080/api/v1/experiments/readonly-modify
 Accept: application/json
 
 ### ------------------------------------------

@@ -57,15 +57,31 @@ fun experimentReadOnlyStatus(): Map<String, Any?> {
 ```kotlin
 @Transactional(readOnly = true)
 fun experimentReadOnlyWithModification(transactionId: Long): Map<String, Any?> {
+    val result = mutableMapOf<String, Any?>()
     val transaction = transactionRepository.findById(transactionId).orElse(null)
+        ?: return mapOf("error" to "Transaction not found")
+    val originalAmount = transaction.amount
+    result["original_amount"] = originalAmount
     
-    // 수동 flush 시도
+    // readOnly 트랜잭션에서 JPQL UPDATE 시도
     try {
-        entityManager.flush()
-        // 변경사항 없으면 성공!
+        val updated = entityManager.createQuery(
+            "UPDATE Transaction t SET t.amount = :newAmount WHERE t.id = :id"
+        )
+            .setParameter("newAmount", BigDecimal("99999.99"))
+            .setParameter("id", transactionId)
+            .executeUpdate()
+        
+        result["jpql_update"] = "성공 (${updated}건)"
     } catch (e: Exception) {
-        // 변경사항 있으면 실패할 수 있음
+        result["jpql_update"] = "실패: ${e.javaClass.simpleName}"
     }
+
+    entityManager.clear()
+    val dbAmount = transactionRepository.findById(transactionId).orElse(null)?.amount
+    result["db_amount_after"] = dbAmount
+    result["amount_changed"] = dbAmount != originalAmount
+    return result
 }
 ```
 
@@ -155,7 +171,7 @@ fun experimentWritableMemory(): Map<String, Any?> {
 curl http://localhost:8080/api/v1/experiments/readonly-status
 
 # 실험 B: 수정 시도
-curl http://localhost:8080/api/v1/experiments/readonly-modify/1
+curl http://localhost:8080/api/v1/experiments/readonly-modify
 
 # 실험 C: 성능 비교
 curl http://localhost:8080/api/v1/experiments/readonly-performance

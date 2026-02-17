@@ -14,7 +14,7 @@
 
 ## 테스트 환경
 
-- **엔티티**: Transaction (17개 컬럼)
+- **엔티티**: Transaction (19개 컬럼)
 - **DB**: MySQL 8.x (Docker)
 - **테스트 규모**: 100건, 1,000건, 10,000건
 - **배치 설정**:
@@ -282,26 +282,24 @@ for (Entity entity : dirtyEntities) {
 }
 ```
 
-### 왜 JdbcTemplate이 중간인가?
+### 왜 JdbcTemplate이 실측에서 가장 빨랐나?
 
-1. **PreparedStatement 재사용**: 쿼리 파싱 1회
-2. **배치 실행**: `executeBatch()`로 여러 row 한 번에
-3. **rewriteBatchedStatements**: MySQL 드라이버가 단일 쿼리로 변환
+1. **PreparedStatement 재사용**: SQL 파싱/플랜 캐시 활용
+2. **배치 실행**: `executeBatch()`로 JDBC 드라이버 레벨 최적화
+3. **rewriteBatchedStatements 활성화**: MySQL 드라이버가 multi-row INSERT로 재작성
+4. **문자열 조립 비용 없음**: Native 방식 대비 SQL 문자열 생성/이스케이프 오버헤드가 적음
 
-하지만:
-- Java 객체 → JDBC 파라미터 변환 비용
-- 배치 사이즈 단위로 네트워크 왕복
+### 왜 Native Bulk가 항상 가장 빠르지 않았나?
 
-### 왜 Native Bulk가 가장 빠른가?
+1. **문자열 생성 비용**: 대량 row를 문자열로 조합하는 CPU/메모리 오버헤드
+2. **chunk 분할 실행**: 구현상 `chunked(500)`으로 여러 쿼리 실행 (완전 단일 쿼리 아님)
+3. **이스케이프 처리 비용**: 문자열 컬럼마다 SQL escape 수행 필요
 
-1. **단일 쿼리**: 네트워크 왕복 최소화
-2. **파싱 1회**: DB에서 쿼리 파싱 1회
-3. **트랜잭션 오버헤드 최소**: 단일 INSERT
-
-```sql
--- 1번의 쿼리로 1000건 INSERT
-INSERT INTO transaction (...) VALUES 
-  (...), (...), (...), ... (1000개)
+```kotlin
+// 현재 구현: 500건 단위로 나눠 multi-row INSERT 실행
+entities.chunked(500).forEach { chunk ->
+    entityManager.createNativeQuery("INSERT INTO transaction (...) VALUES ...").executeUpdate()
+}
 ```
 
 ---
