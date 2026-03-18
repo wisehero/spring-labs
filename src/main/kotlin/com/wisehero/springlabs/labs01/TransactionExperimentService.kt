@@ -1,14 +1,10 @@
 package com.wisehero.springlabs.labs01
 
-import com.wisehero.springlabs.entity.Transaction
-import com.wisehero.springlabs.repository.TransactionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import java.math.BigDecimal
-import java.time.LocalDateTime
 
 /**
  * ==========================================
@@ -23,9 +19,7 @@ import java.time.LocalDateTime
  * - 따라서 내부 호출 시 @Transactional 설정이 무시됨!
  */
 @Service
-class TransactionExperimentService(
-    private val transactionRepository: TransactionRepository
-) {
+class TransactionExperimentService {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
