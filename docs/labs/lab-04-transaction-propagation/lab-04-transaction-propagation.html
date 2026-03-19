@@ -321,12 +321,12 @@
   }
 
   .sim-controls {
-    display: flex;
-    gap: 12px;
-    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 20px;
     background: var(--void);
     border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
   }
 
   .sim-btn {
@@ -346,6 +346,7 @@
   .sim-btn.active.cyan   { color: var(--cyan);  background: var(--cyan-dim);  border-color: rgba(0,212,255,0.4); }
   .sim-btn.active.amber  { color: var(--amber); background: var(--amber-dim); border-color: rgba(255,184,0,0.4); }
   .sim-btn.active.red    { color: var(--red);   background: var(--red-dim);   border-color: rgba(255,77,106,0.4); }
+  .sim-btn.active.green  { color: var(--green); background: var(--green-dim); border-color: rgba(0,230,138,0.4); }
 
   .sim-stage {
     padding: 32px 24px;
@@ -461,6 +462,32 @@
   .tx-box.rollback-only .tx-box-name   { color: var(--red); }
   .tx-box.rollback-only .tx-box-id     { color: var(--red); }
   .tx-box.rollback-only .tx-box-status { background: var(--red-dim); color: var(--red); }
+
+  .tx-box.committed {
+    background: rgba(0,230,138,0.08);
+    border-color: rgba(0,230,138,0.4);
+  }
+  .tx-box.committed .tx-box-name   { color: var(--green); }
+  .tx-box.committed .tx-box-id     { color: var(--green); }
+  .tx-box.committed .tx-box-status { background: var(--green-dim); color: var(--green); }
+
+  .tx-box.outer-none {
+    background: rgba(156,163,176,0.04);
+    border-color: rgba(156,163,176,0.15);
+    border-style: dashed;
+  }
+  .tx-box.outer-none .tx-box-name   { color: var(--dim); }
+  .tx-box.outer-none .tx-box-id     { color: var(--dim); }
+  .tx-box.outer-none .tx-box-status { background: rgba(156,163,176,0.1); color: var(--dim); }
+
+  .tx-box.inner-error {
+    background: rgba(255,77,106,0.1);
+    border-color: rgba(255,77,106,0.5);
+    animation: pulse-red 1s ease-in-out infinite;
+  }
+  .tx-box.inner-error .tx-box-name   { color: var(--red); }
+  .tx-box.inner-error .tx-box-id     { color: var(--red); }
+  .tx-box.inner-error .tx-box-status { background: var(--red-dim); color: var(--red); }
 
   @keyframes pulse-red {
     0%,100% { box-shadow: 0 0 0 0 rgba(255,77,106,0); }
@@ -906,7 +933,7 @@
     .masthead      { padding: 48px 0 40px; }
     .section       { padding-top: 40px; }
     .closer        { padding: 32px 20px; }
-    .sim-controls  { gap: 8px; }
+    .sim-controls  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .sim-btn       { font-size: 12px; padding: 8px 14px; }
   }
 </style>
@@ -1015,6 +1042,12 @@ Outer TX ───── <span style="color:var(--dim)">[SUSPENDED]</span> ─�
         <button class="sim-btn" onclick="selectScenario('rollback_trap')" id="btn-rollback_trap">
           REQUIRED 롤백 트랩
         </button>
+        <button class="sim-btn" onclick="selectScenario('required_creates')" id="btn-required_creates">REQUIRED 새 TX 생성</button>
+        <button class="sim-btn" onclick="selectScenario('rn_inner_throws')" id="btn-rn_inner_throws">REQUIRES_NEW 예외 격리</button>
+        <button class="sim-btn" onclick="selectScenario('outer_fails')" id="btn-outer_fails">Outer 실패, Inner 생존</button>
+        <button class="sim-btn" onclick="selectScenario('rollback_deep')" id="btn-rollback_deep">롤백 심화 (3시나리오)</button>
+        <button class="sim-btn" onclick="selectScenario('connection_sep')" id="btn-connection_sep">커넥션 분리</button>
+        <button class="sim-btn" onclick="selectScenario('pool_exhaust')" id="btn-pool_exhaust">커넥션 풀 고갈</button>
       </div>
 
       <!-- Diagram Stage -->
@@ -1587,6 +1620,295 @@ const scenarios = {
         ]
       }
     ]
+  },
+
+  // 4-2: REQUIRED creates new when no existing TX
+  required_creates: {
+    color: 'green',
+    steps: [
+      {
+        label: 'Controller에서 직접 호출 (TX 없음)',
+        outer: { cls: 'outer-none', name: 'NO TX', id: '\u2014', status: 'NONE' },
+        inner: { cls: 'inner-joined', name: 'INNER', id: '\u2014', status: 'NOT STARTED' },
+        arrow: { show: true, label: '직접 호출' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info', msg: 'Controller \u2192 Inner(REQUIRED) 직접 호출' },
+          { ts: '10:00:00.002', lvl: 'info', msg: '현재 활성 트랜잭션: 없음' },
+        ]
+      },
+      {
+        label: 'REQUIRED가 새 트랜잭션 생성',
+        outer: { cls: 'outer-none', name: 'NO TX', id: '\u2014', status: 'NONE' },
+        inner: { cls: 'inner-new', name: 'NEW TX', id: 'conn-77', status: 'CREATED' },
+        arrow: { show: true, label: '새 TX 생성' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.003', lvl: 'info', msg: 'TransactionInterceptor: 기존 TX 없음 감지' },
+          { ts: '10:00:00.004', lvl: 'info', msg: '\u2192 doBegin() \u2192 새 트랜잭션 시작 (conn-77)' },
+          { ts: '10:00:00.005', lvl: 'info', msg: 'REQUIRED = "있으면 참여, 없으면 생성"' },
+        ]
+      },
+      {
+        label: '정상 커밋',
+        outer: { cls: 'outer-none', name: 'NO TX', id: '\u2014', status: 'NONE' },
+        inner: { cls: 'committed', name: 'NEW TX', id: 'conn-77', status: 'COMMITTED' },
+        arrow: { show: false, label: '' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'info', msg: 'Inner 메서드 정상 완료' },
+          { ts: '10:00:00.011', lvl: 'info', msg: '\u2192 COMMIT (conn-77)' },
+          { ts: '10:00:00.012', lvl: 'success', msg: '\u2713 tx_active=true, tx_name 확인 완료' },
+        ]
+      }
+    ]
+  },
+
+  // 4-5: REQUIRES_NEW inner exception isolation
+  rn_inner_throws: {
+    color: 'green',
+    steps: [
+      {
+        label: 'Outer TX 시작 + 행 A 삽입',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER', id: '\u2014', status: 'NOT STARTED' },
+        arrow: { show: false, label: '' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info', msg: 'Outer TX 시작 (conn-42)' },
+          { ts: '10:00:00.002', lvl: 'info', msg: 'INSERT 행 A (businessNo=PROP-4-5-A)' },
+        ]
+      },
+      {
+        label: 'Inner(REQUIRES_NEW) 새 TX + 행 B 삽입',
+        outer: { cls: 'outer-suspended', name: 'OUTER TX', id: 'conn-42', status: 'SUSPENDED' },
+        inner: { cls: 'inner-new', name: 'INNER TX', id: 'conn-88', status: 'ACTIVE' },
+        arrow: { show: true, label: 'REQUIRES_NEW' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.005', lvl: 'info', msg: 'Outer TX suspend \u2192 Inner TX 시작 (conn-88)' },
+          { ts: '10:00:00.006', lvl: 'info', msg: 'INSERT 행 B (businessNo=PROP-4-5-B)' },
+        ]
+      },
+      {
+        label: 'Inner 예외 \u2192 Inner만 롤백',
+        outer: { cls: 'outer-suspended', name: 'OUTER TX', id: 'conn-42', status: 'SUSPENDED' },
+        inner: { cls: 'inner-error', name: 'INNER TX', id: 'conn-88', status: 'ROLLBACK' },
+        arrow: { show: true, label: '예외 발생!' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.008', lvl: 'error', msg: 'Inner: RuntimeException 발생!' },
+          { ts: '10:00:00.009', lvl: 'error', msg: '\u2192 Inner TX만 ROLLBACK (conn-88)' },
+          { ts: '10:00:00.010', lvl: 'info', msg: '행 B 롤백됨. Outer TX는 영향 없음!' },
+        ]
+      },
+      {
+        label: 'Outer catch \u2192 정상 커밋',
+        outer: { cls: 'committed', name: 'OUTER TX', id: 'conn-42', status: 'COMMITTED' },
+        inner: { cls: 'inner-error', name: 'INNER TX', id: 'conn-88', status: 'ROLLED BACK' },
+        arrow: { show: false, label: '' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.012', lvl: 'info', msg: 'Outer: catch(Exception) \u2192 정상 계속' },
+          { ts: '10:00:00.013', lvl: 'info', msg: 'Outer TX resume \u2192 COMMIT (conn-42)' },
+          { ts: '10:00:00.014', lvl: 'success', msg: '\u2713 행 A 커밋 성공, 행 B 롤백. 예외 격리 성공!' },
+        ]
+      }
+    ]
+  },
+
+  // 4-6: Outer fails after Inner commits
+  outer_fails: {
+    color: 'amber',
+    steps: [
+      {
+        label: 'Outer TX 시작 + 행 A 삽입',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER', id: '\u2014', status: 'NOT STARTED' },
+        arrow: { show: false, label: '' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info', msg: 'Outer TX 시작 (conn-42)' },
+          { ts: '10:00:00.002', lvl: 'info', msg: 'INSERT 행 A' },
+        ]
+      },
+      {
+        label: 'Inner(REQUIRES_NEW) 독립 커밋',
+        outer: { cls: 'outer-suspended', name: 'OUTER TX', id: 'conn-42', status: 'SUSPENDED' },
+        inner: { cls: 'committed', name: 'INNER TX', id: 'conn-88', status: 'COMMITTED' },
+        arrow: { show: true, label: '독립 커밋 \u2713' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.005', lvl: 'info', msg: 'Inner TX 시작 (conn-88) \u2192 행 B 삽입' },
+          { ts: '10:00:00.006', lvl: 'info', msg: '\u2192 Inner TX COMMIT 완료! 행 B는 DB에 확정' },
+        ]
+      },
+      {
+        label: 'Outer 예외 \u2192 Outer만 롤백',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLBACK' },
+        inner: { cls: 'committed', name: 'INNER TX', id: 'conn-88', status: 'COMMITTED' },
+        arrow: { show: true, label: '\u26a0 Outer 실패' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'error', msg: 'Outer: RuntimeException 발생!' },
+          { ts: '10:00:00.011', lvl: 'error', msg: '\u2192 Outer TX ROLLBACK (conn-42)' },
+          { ts: '10:00:00.012', lvl: 'warn', msg: '행 A 롤백, 행 B 생존 (이미 커밋됨)' },
+          { ts: '10:00:00.013', lvl: 'warn', msg: '\u26a0 데이터 불일치 가능성! REQUIRES_NEW의 양날의 검' },
+        ]
+      }
+    ]
+  },
+
+  // 4-7: UnexpectedRollbackException deep dive (3 sub-scenarios)
+  rollback_deep: {
+    color: 'red',
+    steps: [
+      {
+        label: 'Scenario A: Inner 예외 catch 후 rollback-only 확인',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'JOINED' },
+        arrow: { show: true, label: 'REQUIRED' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info', msg: '\u2500\u2500 Scenario A: Inner 예외 catch \u2500\u2500' },
+          { ts: '10:00:00.002', lvl: 'info', msg: 'Inner(REQUIRED): 같은 TX 참여 (conn-42)' },
+        ]
+      },
+      {
+        label: 'A: 예외 \u2192 rollback-only \u2192 catch해도 URE',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLED BACK' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'EXCEPTION' },
+        arrow: { show: true, label: 'rollback-only' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.005', lvl: 'error', msg: 'Inner: RuntimeException \u2192 rollback-only 마킹' },
+          { ts: '10:00:00.006', lvl: 'warn', msg: 'Outer: catch() \u2192 커밋 시도' },
+          { ts: '10:00:00.007', lvl: 'error', msg: '\u2192 UnexpectedRollbackException!' },
+        ]
+      },
+      {
+        label: 'Scenario B: Inner 예외를 catch하지 않음',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLBACK' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'EXCEPTION' },
+        arrow: { show: true, label: '예외 전파' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'info', msg: '\u2500\u2500 Scenario B: Inner 예외 미catch \u2500\u2500' },
+          { ts: '10:00:00.011', lvl: 'error', msg: 'Inner: RuntimeException \u2192 Outer로 전파' },
+          { ts: '10:00:00.012', lvl: 'error', msg: '\u2192 RuntimeException (NOT URE) \u2014 일반 롤백' },
+        ]
+      },
+      {
+        label: 'Scenario C: setRollbackOnly() 직접 호출',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLED BACK' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'MARKED' },
+        arrow: { show: true, label: 'setRollbackOnly' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.020', lvl: 'info', msg: '\u2500\u2500 Scenario C: 예외 없이 setRollbackOnly() \u2500\u2500' },
+          { ts: '10:00:00.021', lvl: 'warn', msg: 'Inner: setRollbackOnly() 호출 (예외 없음!)' },
+          { ts: '10:00:00.022', lvl: 'warn', msg: 'Inner 정상 리턴 \u2192 Outer도 정상 흐름' },
+          { ts: '10:00:00.023', lvl: 'error', msg: '\u2192 커밋 시 URE! 예외 없어도 TX 오염됨' },
+        ]
+      }
+    ]
+  },
+
+  // 4-8: DB connection separation
+  connection_sep: {
+    color: 'cyan',
+    steps: [
+      {
+        label: 'Outer TX \u2014 커넥션 #42',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER', id: '\u2014', status: 'NOT STARTED' },
+        arrow: { show: false, label: '' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info', msg: 'Outer TX 시작 \u2192 HikariPool에서 conn-42 획득' },
+        ]
+      },
+      {
+        label: 'Inner(REQUIRED) \u2014 같은 커넥션 공유',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'JOINED' },
+        arrow: { show: true, label: 'REQUIRED' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.003', lvl: 'info', msg: 'Inner(REQUIRED): 기존 TX 참여 \u2192 conn-42 공유' },
+          { ts: '10:00:00.004', lvl: 'info', msg: '커넥션 1개만 사용 (풀 점유: 1)' },
+        ]
+      },
+      {
+        label: 'Inner(REQUIRES_NEW) \u2014 별도 커넥션!',
+        outer: { cls: 'outer-suspended', name: 'OUTER TX', id: 'conn-42', status: 'SUSPENDED' },
+        inner: { cls: 'inner-new', name: 'INNER TX', id: 'conn-88', status: 'NEW CONN' },
+        arrow: { show: true, label: 'REQUIRES_NEW' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.006', lvl: 'warn', msg: 'Inner(REQUIRES_NEW): 새 커넥션 필요!' },
+          { ts: '10:00:00.007', lvl: 'warn', msg: '\u2192 HikariPool에서 conn-88 추가 획득' },
+          { ts: '10:00:00.008', lvl: 'warn', msg: '커넥션 2개 동시 점유! (conn-42 suspend, conn-88 active)' },
+        ]
+      },
+      {
+        label: '커넥션 분리 확인 완료',
+        outer: { cls: 'committed', name: 'OUTER TX', id: 'conn-42', status: 'COMMITTED' },
+        inner: { cls: 'committed', name: 'INNER TX', id: 'conn-88', status: 'COMMITTED' },
+        arrow: { show: false, label: '' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'info', msg: 'Inner COMMIT (conn-88 반환)' },
+          { ts: '10:00:00.011', lvl: 'info', msg: 'Outer resume \u2192 COMMIT (conn-42 반환)' },
+          { ts: '10:00:00.012', lvl: 'success', msg: '\u2713 REQUIRES_NEW = 2개 커넥션 동시 점유' },
+        ]
+      }
+    ]
+  },
+
+  // 4-9: Connection pool exhaustion
+  pool_exhaust: {
+    color: 'red',
+    steps: [
+      {
+        label: '재귀 REQUIRES_NEW 시작',
+        outer: { cls: 'outer-default', name: 'DEPTH 1', id: 'conn-1', status: 'ACTIVE' },
+        inner: { cls: 'inner-new', name: 'DEPTH 2', id: 'conn-2', status: 'ACTIVE' },
+        arrow: { show: true, label: 'REQUIRES_NEW' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info', msg: 'Depth 1: conn-1 획득' },
+          { ts: '10:00:00.002', lvl: 'info', msg: 'Depth 2: REQUIRES_NEW \u2192 conn-2 획득' },
+          { ts: '10:00:00.003', lvl: 'info', msg: 'HikariPool: active=2, idle=8' },
+        ]
+      },
+      {
+        label: '중첩 계속... 풀 소진 중',
+        outer: { cls: 'outer-suspended', name: 'DEPTH 1~9', id: 'conn-1~9', status: 'SUSPENDED' },
+        inner: { cls: 'inner-new', name: 'DEPTH 10', id: 'conn-10', status: 'ACTIVE' },
+        arrow: { show: true, label: '계속 중첩' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'warn', msg: 'Depth 3~10: 각각 새 커넥션 획득' },
+          { ts: '10:00:00.011', lvl: 'warn', msg: 'HikariPool: active=10, idle=0' },
+          { ts: '10:00:00.012', lvl: 'error', msg: '\u26a0 풀 사이즈(10) 전부 소진!' },
+        ]
+      },
+      {
+        label: 'Depth 11 \u2192 커넥션 획득 실패!',
+        outer: { cls: 'outer-suspended', name: 'DEPTH 1~10', id: 'conn-1~10', status: 'ALL HELD' },
+        inner: { cls: 'inner-error', name: 'DEPTH 11', id: '???', status: 'TIMEOUT!' },
+        arrow: { show: true, label: '풀 고갈!' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.020', lvl: 'error', msg: 'Depth 11: REQUIRES_NEW \u2192 새 커넥션 요청' },
+          { ts: '10:00:00.021', lvl: 'error', msg: '\u2192 HikariPool: 가용 커넥션 0개!' },
+          { ts: '10:00:00.022', lvl: 'error', msg: '\u2192 connectionTimeout 동안 대기...' },
+          { ts: '10:00:00.023', lvl: 'error', msg: '!!! SQLTransientConnectionException: Connection not available!' },
+          { ts: '10:00:00.024', lvl: 'error', msg: '교훈: REQUIRES_NEW + 루프/재귀 = 풀 고갈 위험' },
+        ]
+      }
+    ]
   }
 };
 
@@ -1596,7 +1918,7 @@ let currentStep = 0;
 function selectScenario(name) {
   currentScenario = name;
   currentStep = 0;
-  document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active', 'cyan', 'amber', 'red'));
+  document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active', 'cyan', 'amber', 'red', 'green'));
   const btn = document.getElementById('btn-' + name);
   const color = scenarios[name].color;
   btn.classList.add('active', color);
