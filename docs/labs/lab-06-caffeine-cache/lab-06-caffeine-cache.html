@@ -236,46 +236,76 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 40px;
+  padding: 40px 32px;
   position: relative;
   overflow: hidden;
 }
 
-.flow-chain {
+.flow-pipeline {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0;
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.flow-stage {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
-  margin-bottom: 40px;
+  position: relative;
+  padding: 0 4px;
 }
 
-.flow-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  gap: 0;
+/* 노드 사이 연결선 (마지막 제외) */
+.flow-stage:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -2px;
+  width: calc(100% - 70%);
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), rgba(0,212,255,0.3));
+  transform: translateY(-50%);
+  z-index: 0;
 }
 
-.flow-row-connector {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--cyan);
-  font-size: 16px;
-  line-height: 1;
-  padding: 4px 0;
-  opacity: 0.7;
+/* 화살표 삼각형 */
+.flow-stage:not(:last-child) .flow-node::after {
+  content: '';
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-left: 6px solid var(--cyan);
+  opacity: 0.6;
+  z-index: 1;
 }
 
 .flow-node {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 14px 10px;
   text-align: center;
   position: relative;
-  white-space: nowrap;
+  width: 100%;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.flow-node:hover {
+  border-color: rgba(0,212,255,0.4);
+  transform: translateY(-2px);
+}
+
+/* 단계 번호 */
+.flow-stage-num {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 9px;
+  color: var(--dim);
+  margin-bottom: 6px;
+  letter-spacing: 0.08em;
 }
 
 .flow-node .node-label {
@@ -283,21 +313,33 @@ body {
   font-size: 11px;
   color: var(--cyan);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .flow-node .node-sub {
   font-family: 'Noto Sans KR', sans-serif;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--dim);
-  margin-top: 3px;
+  margin-top: 4px;
+  white-space: nowrap;
 }
 
-.flow-arrow {
-  color: var(--cyan);
-  font-size: 18px;
-  padding: 0 6px;
-  flex-shrink: 0;
-  opacity: 0.7;
+@media (max-width: 900px) {
+  .flow-pipeline {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 0;
+  }
+  .flow-stage:nth-child(3)::after { display: none; }
+  .flow-stage:nth-child(3) .flow-node::after { display: none; }
+}
+
+@media (max-width: 500px) {
+  .flow-pipeline {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 0;
+  }
+  .flow-stage:nth-child(2n)::after { display: none; }
+  .flow-stage:nth-child(2n) .flow-node::after { display: none; }
 }
 
 .paths-row {
@@ -1200,38 +1242,47 @@ code {
     <p class="section-sub">@Cacheable은 AOP 프록시가 가로채 CacheManager에게 위임한다. 구현체(Caffeine, Redis 등)와 분리된 추상 레이어.</p>
 
     <div class="abstraction-flow">
-      <div class="flow-chain">
-        <div class="flow-row">
+      <div class="flow-pipeline">
+        <div class="flow-stage">
+          <div class="flow-stage-num">01</div>
           <div class="flow-node">
             <div class="node-label">@Cacheable</div>
             <div class="node-sub">어노테이션</div>
           </div>
-          <div class="flow-arrow">→</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-num">02</div>
           <div class="flow-node">
             <div class="node-label">CGLIB Proxy</div>
             <div class="node-sub">메서드 인터셉트</div>
           </div>
-          <div class="flow-arrow">→</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-num">03</div>
           <div class="flow-node">
             <div class="node-label">CacheInterceptor</div>
             <div class="node-sub">AOP Advice</div>
           </div>
         </div>
-        <div class="flow-row-connector">↓</div>
-        <div class="flow-row">
+        <div class="flow-stage">
+          <div class="flow-stage-num">04</div>
           <div class="flow-node">
-            <div class="node-label">CaffeineCache</div>
-            <div class="node-sub">com.github.benmanes</div>
+            <div class="node-label">CacheAspectSupport</div>
+            <div class="node-sub">HIT / MISS 판단</div>
           </div>
-          <div class="flow-arrow">←</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-num">05</div>
           <div class="flow-node">
             <div class="node-label">CacheManager</div>
             <div class="node-sub">CaffeineCacheManager</div>
           </div>
-          <div class="flow-arrow">←</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-num">06</div>
           <div class="flow-node">
-            <div class="node-label">CacheAspectSupport</div>
-            <div class="node-sub">HIT / MISS 판단</div>
+            <div class="node-label">CaffeineCache</div>
+            <div class="node-sub">com.github.benmanes</div>
           </div>
         </div>
       </div>
