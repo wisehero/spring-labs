@@ -1,6 +1,7 @@
 package com.wisehero.springlabs.transaction.controller
 
 import com.wisehero.springlabs.common.dto.ApiResponse
+import com.wisehero.springlabs.common.dto.CursorPageResponse
 import com.wisehero.springlabs.common.dto.PageResponse
 import com.wisehero.springlabs.transaction.dto.TransactionDetailResponse
 import com.wisehero.springlabs.transaction.dto.TransactionListResponse
@@ -56,6 +57,34 @@ class TransactionController(
 
         val result = transactionService.searchTransactions(request)
         return ResponseEntity.ok(ApiResponse.success(result, "거래내역 조회 성공"))
+    }
+
+    @GetMapping("/cursor")
+    fun searchTransactionsWithCursor(
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) startDateTime: LocalDateTime?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) endDateTime: LocalDateTime?,
+        @RequestParam(required = false) transactionState: String?,
+        @RequestParam(required = false) businessNo: String?,
+        @RequestParam(required = false) minAmount: BigDecimal?,
+        @RequestParam(required = false) maxAmount: BigDecimal?,
+        @RequestParam(required = false) posTransactionNo: String?,
+        @RequestParam(required = false) cashReceiptIssueYn: Boolean?,
+        @RequestParam(required = false) cursorId: Long?,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<ApiResponse<CursorPageResponse<TransactionListResponse>>> {
+        val request = TransactionSearchRequest(
+            startDateTime = startDateTime,
+            endDateTime = endDateTime,
+            transactionState = transactionState,
+            businessNo = businessNo,
+            minAmount = minAmount,
+            maxAmount = maxAmount,
+            posTransactionNo = posTransactionNo,
+            cashReceiptIssueYn = cashReceiptIssueYn
+        )
+
+        val result = transactionService.searchTransactionsWithCursor(request, cursorId, size)
+        return ResponseEntity.ok(ApiResponse.success(result, "거래내역 커서 기반 조회 성공"))
     }
 
     @GetMapping("/{id}")

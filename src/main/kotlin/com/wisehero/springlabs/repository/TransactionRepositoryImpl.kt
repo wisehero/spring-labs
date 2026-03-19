@@ -45,6 +45,15 @@ class TransactionRepositoryImpl(
         return PageImpl(content, pageable, total)
     }
 
+    override fun countByConditions(request: TransactionSearchRequest): Long {
+        val whereConditions = buildWhereConditions(request)
+        return queryFactory
+            .select(transaction.count())
+            .from(transaction)
+            .where(*whereConditions.toTypedArray())
+            .fetchOne() ?: 0L
+    }
+
     private fun buildWhereConditions(request: TransactionSearchRequest): List<BooleanExpression> {
         return listOfNotNull(
             request.startDateTime?.let { transaction.approveDateTime.goe(it) },
@@ -56,6 +65,26 @@ class TransactionRepositoryImpl(
             request.posTransactionNo?.let { transaction.posTransactionNo.contains(it) },
             request.cashReceiptIssueYn?.let { transaction.cashReceiptIssueYn.eq(it) }
         )
+    }
+
+    override fun searchWithCursor(
+        request: TransactionSearchRequest,
+        cursorId: Long?,
+        size: Int
+    ): List<Transaction> {
+        val whereConditions = buildWhereConditions(request).toMutableList()
+
+        if (cursorId != null) {
+            whereConditions.add(transaction.id.lt(cursorId))
+        }
+
+        // size + 1개를 조회하여 다음 페이지 존재 여부를 판단
+        return queryFactory
+            .selectFrom(transaction)
+            .where(*whereConditions.toTypedArray())
+            .orderBy(transaction.id.desc())
+            .limit((size + 1).toLong())
+            .fetch()
     }
 
     private fun buildOrderSpecifier(sortBy: String, sortDirection: String): OrderSpecifier<*> {

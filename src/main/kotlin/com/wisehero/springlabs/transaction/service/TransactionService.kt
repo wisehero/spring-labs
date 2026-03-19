@@ -1,5 +1,6 @@
 package com.wisehero.springlabs.transaction.service
 
+import com.wisehero.springlabs.common.dto.CursorPageResponse
 import com.wisehero.springlabs.common.dto.PageResponse
 import com.wisehero.springlabs.common.exception.BusinessException
 import com.wisehero.springlabs.common.exception.ErrorCode
@@ -27,6 +28,22 @@ class TransactionService(
         val transaction = transactionRepository.findById(id)
             .orElseThrow { BusinessException(ErrorCode.TRANSACTION_NOT_FOUND) }
         return TransactionDetailResponse.from(transaction)
+    }
+
+    fun searchTransactionsWithCursor(
+        request: TransactionSearchRequest,
+        cursorId: Long?,
+        size: Int
+    ): CursorPageResponse<TransactionListResponse> {
+        validateSearchRequest(request)
+        val validatedSize = size.coerceIn(1, 100)
+        val results = transactionRepository.searchWithCursor(request, cursorId, validatedSize)
+        return CursorPageResponse.from(
+            content = results,
+            size = validatedSize,
+            cursorExtractor = { it.id!! },
+            transform = { TransactionListResponse.from(it) }
+        )
     }
 
     private fun validateSearchRequest(request: TransactionSearchRequest) {

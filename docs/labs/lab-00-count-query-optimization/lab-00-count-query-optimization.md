@@ -314,27 +314,167 @@ SELECT * FROM transaction WHERE ... ORDER BY id LIMIT 20 OFFSET 900000;
 
 대량 데이터에서 뒤쪽 페이지까지 자주 접근한다면 [Cursor 기반 페이징](#1-cursor-기반-페이징-keyset-pagination)을 검토하세요.
 
-## 대안적 접근법
+## 데이터 변경 시 OFFSET 기반 페이지네이션의 문제
 
-### 1. Cursor 기반 페이징 (Keyset Pagination)
+> 이 섹션의 실험 코드: `Lab00PaginationConsistencyTest.kt`
 
-```sql
--- 첫 페이지
-SELECT * FROM transaction 
-ORDER BY id DESC 
-LIMIT 20;
+OFFSET 기반 페이지네이션은 페이지 사이에 데이터가 추가/삭제되면 **중복 노출**이나 **데이터 누락**이 발생합니다.
 
--- 다음 페이지 (마지막 ID 기준)
-SELECT * FROM transaction 
-WHERE id < 12345  -- 이전 페이지 마지막 ID
-ORDER BY id DESC 
-LIMIT 20;
+### 실험 1: 데이터 추가 시 중복 발생
+
+```
+초기 데이터: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] (ID 내림차순)
+
+1. 1페이지 요청 (offset=0, limit=5)
+   → 결과: [10, 9, 8, 7, 6]
+
+2. 새 데이터 INSERT (ID 11)
+   → 전체 데이터: [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+3. 2페이지 요청 (offset=5, limit=5)
+   → 결과: [6, 5, 4, 3, 2]
+              ↑ ID 6이 1페이지에도 있었음 → 중복!
 ```
 
-**장점:** totalElements 자체가 불필요
-**단점:** "5페이지로 점프" 불가능
+**원인:** 새 데이터가 정렬 순서의 앞쪽에 삽입되면서 기존 데이터의 offset이 1칸씩 뒤로 밀림
 
-### 2. 비동기 카운트
+### 실험 2: 데이터 삭제 시 누락 발생
+
+```
+초기 데이터: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+1. 1페이지 요청 (offset=0, limit=5)
+   → 결과: [10, 9, 8, 7, 6]
+
+2. ID 10 DELETE
+   → 전체 데이터: [9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+3. 2페이지 요청 (offset=5, limit=5)
+   → 결과: [4, 3, 2, 1]
+   → ID 5는 어디에도 없음 → 누락!
+```
+
+**원인:** 데이터가 삭제되면서 기존 데이터의 offset이 1칸씩 앞으로 당겨짐
+
+### 실험 3: totalElements 캐싱 시 불일치
+
+```
+1. 1페이지 조회 → totalElements: 10, totalPages: 2
+2. 3건 삭제 → 실제 7건
+3. 캐싱된 totalElements=10으로 2페이지 요청
+   → 응답의 totalElements: 10 (실제: 7)
+   → UI에 잘못된 페이지 수 표시
+```
+
+## 해결책: Cursor(Keyset) 기반 페이지네이션
+
+OFFSET 대신 **마지막으로 본 ID**를 기준으로 다음 페이지를 조회합니다.
+
+### 핵심 원리
+
+```sql
+-- OFFSET 기반 (불안정)
+SELECT * FROM transaction ORDER BY id DESC LIMIT 5 OFFSET 5;
+-- → "5번째부터" → 데이터 변경 시 어디가 "5번째"인지 바뀜
+
+-- CURSOR 기반 (안정)
+SELECT * FROM transaction WHERE id < 6 ORDER BY id DESC LIMIT 5;
+-- → "ID 6보다 작은 것" → 데이터 변경과 무관하게 정확한 위치
+```
+
+### 구현 코드
+
+#### 1. Response DTO
+
+```kotlin
+// CursorPageResponse.kt
+data class CursorPageResponse<T : Any>(
+    val content: List<T>,
+    val size: Int,
+    val nextCursor: Long?,   // null이면 마지막 페이지
+    val hasNext: Boolean
+)
+```
+
+#### 2. Repository
+
+```kotlin
+// TransactionRepositoryImpl.kt
+override fun searchWithCursor(
+    request: TransactionSearchRequest,
+    cursorId: Long?,
+    size: Int
+): List<Transaction> {
+    val whereConditions = buildWhereConditions(request).toMutableList()
+
+    if (cursorId != null) {
+        whereConditions.add(transaction.id.lt(cursorId))
+    }
+
+    // size + 1개를 조회하여 다음 페이지 존재 여부를 판단
+    return queryFactory
+        .selectFrom(transaction)
+        .where(*whereConditions.toTypedArray())
+        .orderBy(transaction.id.desc())
+        .limit((size + 1).toLong())
+        .fetch()
+}
+```
+
+#### 3. API 엔드포인트
+
+```http
+# 첫 페이지
+GET /api/v1/transactions/cursor?size=20
+
+# 다음 페이지 (이전 응답의 nextCursor 전달)
+GET /api/v1/transactions/cursor?cursorId=12345&size=20
+```
+
+### 실험 4: 데이터 추가 시에도 중복 없음
+
+```
+초기 데이터: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+1. 1페이지 조회 (cursor 없음)
+   → 결과: [10, 9, 8, 7, 6], nextCursor: 6
+
+2. 새 데이터 INSERT (ID 11)
+
+3. 2페이지 조회 (WHERE id < 6)
+   → 결과: [5, 4, 3, 2, 1]
+   → ID 11은 조건(id < 6)에 해당하지 않으므로 영향 없음
+   → 중복 0건!
+```
+
+### 실험 5: 데이터 삭제 시에도 누락 없음
+
+```
+1. 1페이지 조회 → [10, 9, 8, 7, 6], nextCursor: 6
+
+2. ID 10 DELETE
+
+3. 2페이지 조회 (WHERE id < 6)
+   → 결과: [5, 4, 3, 2, 1]
+   → 삭제된 ID 10은 이미 1페이지에서 조회됨
+   → 누락 0건!
+```
+
+### OFFSET vs CURSOR 비교
+
+| 항목 | OFFSET 기반 | CURSOR 기반 |
+|------|------------|------------|
+| 데이터 추가 시 | 중복 발생 | 중복 없음 |
+| 데이터 삭제 시 | 누락 발생 | 누락 없음 |
+| 특정 페이지 점프 | 가능 (page=5) | 불가능 |
+| Deep Pagination 성능 | 느림 (OFFSET이 커질수록) | 일정 (항상 INDEX SCAN) |
+| totalElements | 필요 (COUNT 쿼리) | 불필요 |
+| 구현 복잡도 | 낮음 | 약간 높음 |
+| 적합한 UI | 페이지 번호 네비게이션 | 무한 스크롤, "더보기" 버튼 |
+
+## 기타 대안적 접근법
+
+### 1. 비동기 카운트
 
 ```kotlin
 // 데이터 먼저 반환, 카운트는 비동기로
@@ -342,7 +482,7 @@ LIMIT 20;
 fun countAsync(request: TransactionSearchRequest): CompletableFuture<Long>
 ```
 
-### 3. 추정 카운트
+### 2. 추정 카운트
 
 ```sql
 -- MySQL 통계 기반 추정 (매우 빠름, 정확도 낮음)
@@ -363,6 +503,7 @@ EXPLAIN SELECT * FROM transaction WHERE ...
 - 간단한 구현으로 **페이징 성능 46% 개선**
 - 클라이언트와의 협업 필요 (totalElements 전달)
 - 대부분의 목록 조회 API에 적용 가능
+- 데이터 변경이 빈번한 환경에서는 **Cursor 기반 페이지네이션** 병행 검토
 
 ## 참고 자료
 

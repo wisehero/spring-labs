@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 00: COUNT Query 최적화 데모</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 24px; color: #1a1a2e; font-size: 1.8rem; }
+        h1 small { display: block; font-size: 0.8rem; color: #888; font-weight: normal; margin-top: 4px; }
+
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 20px; }
+        .card-title { font-size: 1rem; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; border-bottom: 2px solid #e8ecf1; padding-bottom: 8px; }
+
+        /* Filter Section */
+        .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .filter-group label { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-weight: 600; }
+        .filter-group input, .filter-group select {
+            width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 0.85rem; transition: border-color 0.2s;
+        }
+        .filter-group input:focus, .filter-group select:focus { outline: none; border-color: #4a6cf7; }
+        .filter-actions { display: flex; gap: 8px; }
+        .btn { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; }
+        .btn-primary { background: #4a6cf7; color: #fff; }
+        .btn-primary:hover { background: #3b5de7; }
+        .btn-secondary { background: #e8ecf1; color: #555; }
+        .btn-secondary:hover { background: #dce0e8; }
+        .btn-success { background: #22c55e; color: #fff; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: #f59e0b; color: #fff; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+        /* Status Panels */
+        .panels-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .panels-row { grid-template-columns: 1fr; } }
+
+        .status-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+        .status-item:last-child { border-bottom: none; }
+        .status-label { font-size: 0.85rem; color: #666; }
+        .status-value { font-size: 0.95rem; font-weight: 700; }
+
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-orange { background: #fff7ed; color: #9a3412; }
+        .badge-red { background: #fef2f2; color: #991b1b; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .blink { animation: blink 1s ease-in-out infinite; }
+
+        /* Demo Data Controls */
+        .demo-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .data-table th { background: #f8f9fc; color: #555; font-weight: 700; text-align: left; padding: 10px 12px; border-bottom: 2px solid #e8ecf1; }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+        .data-table tr:hover td { background: #f8f9fc; }
+        .data-table .demo-row { background: #fffbeb; }
+        .data-table .demo-row:hover td { background: #fef3c7; }
+
+        /* Pagination */
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 16px; }
+        .page-btn { padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+        .page-btn:hover { border-color: #4a6cf7; color: #4a6cf7; }
+        .page-btn.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .page-info { font-size: 0.85rem; color: #666; margin: 0 8px; }
+
+        /* Event Log */
+        .event-log { max-height: 200px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.8rem; background: #1a1a2e; color: #a8b2d1; border-radius: 8px; padding: 12px; }
+        .event-log .log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .event-log .log-time { color: #64ffda; }
+        .event-log .log-count-exec { color: #22c55e; }
+        .event-log .log-count-skip { color: #f59e0b; }
+        .event-log .log-mismatch { color: #ef4444; }
+        .event-log .log-data { color: #818cf8; }
+
+        .empty-state { text-align: center; padding: 40px; color: #999; }
+        .loading { opacity: 0.6; pointer-events: none; }
+        .response-time { font-size: 0.75rem; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lab 00: COUNT Query 최적화 데모
+            <small>totalElements 캐싱을 통한 COUNT 쿼리 스킵 최적화의 동작과 데이터 변경 시 불일치 현상을 확인합니다</small>
+        </h1>
+
+        <!-- Filter Section -->
+        <div class="card">
+            <div class="card-title">검색 필터</div>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label>거래 상태</label>
+                    <select id="filterState">
+                        <option value="">전체</option>
+                        <option value="APPROVED">승인</option>
+                        <option value="CANCELLED">취소</option>
+                        <option value="PENDING">대기</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>사업자번호</label>
+                    <input type="text" id="filterBusinessNo" placeholder="예: DEMO-LAB00">
+                </div>
+                <div class="filter-group">
+                    <label>최소 금액</label>
+                    <input type="number" id="filterMinAmount" placeholder="0">
+                </div>
+                <div class="filter-group">
+                    <label>최대 금액</label>
+                    <input type="number" id="filterMaxAmount" placeholder="999999">
+                </div>
+                <div class="filter-group">
+                    <label>페이지 크기</label>
+                    <select id="filterSize">
+                        <option value="10">10건</option>
+                        <option value="20" selected>20건</option>
+                        <option value="50">50건</option>
+                        <option value="100">100건</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" onclick="resetAndSearch()">검색</button>
+                <button class="btn btn-secondary" onclick="resetFilters()">초기화</button>
+            </div>
+        </div>
+
+        <!-- Status Panels Row -->
+        <div class="panels-row">
+            <!-- Optimization Status Panel -->
+            <div class="card">
+                <div class="card-title">최적화 상태</div>
+                <div class="status-item">
+                    <span class="status-label">COUNT 쿼리</span>
+                    <span id="countStatus" class="badge badge-green">대기중</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">캐싱값 (totalElements)</span>
+                    <span id="cachedValue" class="status-value">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">실제값 (DB COUNT)</span>
+                    <span id="realValue" class="status-value">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">차이</span>
+                    <span id="diffValue" class="status-value">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">API 응답시간</span>
+                    <span id="responseTime" class="response-time">-</span>
+                </div>
+            </div>
+
+            <!-- Demo Data Controls -->
+            <div class="card">
+                <div class="card-title">데모 데이터 조작</div>
+                <p style="font-size:0.8rem; color:#888; margin-bottom:12px;">
+                    데이터를 추가/삭제하면 캐싱값과 실제값의 차이를 확인할 수 있습니다.<br>
+                    <strong>"COUNT 갱신"</strong>을 눌러 캐싱값을 리셋하면 다시 일치합니다.
+                </p>
+                <div class="demo-controls">
+                    <button class="btn btn-success btn-sm" onclick="insertDemo(10)">+10건 추가</button>
+                    <button class="btn btn-success btn-sm" onclick="insertDemo(100)">+100건 추가</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteDemo(10)">-10건 삭제</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteDemo(100)">-100건 삭제</button>
+                    <button class="btn btn-secondary btn-sm" onclick="cleanupDemo()">전체 정리</button>
+                    <button class="btn btn-warning btn-sm" onclick="refreshCount()">COUNT 갱신</button>
+                </div>
+                <div style="margin-top: 12px;">
+                    <div class="status-item">
+                        <span class="status-label">데모 데이터 건수</span>
+                        <span id="demoCount" class="status-value">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="card">
+            <div class="card-title">거래 데이터</div>
+            <div id="tableContainer">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>승인일시</th>
+                            <th>금액</th>
+                            <th>사업자번호</th>
+                            <th>POS거래번호</th>
+                            <th>상태</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="6" class="empty-state">검색 버튼을 눌러 데이터를 조회하세요</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Pagination -->
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card">
+            <div class="card-title">이벤트 로그</div>
+            <div class="event-log" id="eventLog">
+                <div class="log-entry"><span class="log-time">[시작]</span> Lab 00 데모 페이지가 로드되었습니다. 검색 버튼을 눌러 시작하세요.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== State =====
+        let cachedTotalElements = null;
+        let currentPage = 0;
+        let totalPages = 0;
+        let lastResponseTime = 0;
+
+        // ===== Utility =====
+        function now() {
+            return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+        }
+
+        function formatNumber(n) {
+            if (n == null) return '-';
+            return n.toLocaleString('ko-KR');
+        }
+
+        function formatDateTime(dt) {
+            if (!dt) return '-';
+            return dt.replace('T', ' ').substring(0, 19);
+        }
+
+        function formatAmount(amount) {
+            if (amount == null) return '-';
+            return Number(amount).toLocaleString('ko-KR') + '원';
+        }
+
+        function addLog(message, cssClass) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${now()}]</span> <span class="${cssClass || ''}">${message}</span>`;
+            log.insertBefore(entry, log.firstChild.nextSibling);
+            // Keep max 100 entries
+            while (log.children.length > 101) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        function getFilterParams() {
+            const params = new URLSearchParams();
+            const state = document.getElementById('filterState').value;
+            const businessNo = document.getElementById('filterBusinessNo').value;
+            const minAmount = document.getElementById('filterMinAmount').value;
+            const maxAmount = document.getElementById('filterMaxAmount').value;
+            const size = document.getElementById('filterSize').value;
+
+            if (state) params.set('transactionState', state);
+            if (businessNo) params.set('businessNo', businessNo);
+            if (minAmount) params.set('minAmount', minAmount);
+            if (maxAmount) params.set('maxAmount', maxAmount);
+            params.set('size', size);
+            params.set('sortBy', 'approveDateTime');
+            params.set('sortDirection', 'desc');
+
+            return params;
+        }
+
+        function getCountFilterParams() {
+            const params = new URLSearchParams();
+            const state = document.getElementById('filterState').value;
+            const businessNo = document.getElementById('filterBusinessNo').value;
+            const minAmount = document.getElementById('filterMinAmount').value;
+            const maxAmount = document.getElementById('filterMaxAmount').value;
+
+            if (state) params.set('transactionState', state);
+            if (businessNo) params.set('businessNo', businessNo);
+            if (minAmount) params.set('minAmount', minAmount);
+            if (maxAmount) params.set('maxAmount', maxAmount);
+
+            return params;
+        }
+
+        // ===== Core Search =====
+        async function searchTransactions(page) {
+            currentPage = page;
+            const params = getFilterParams();
+            params.set('page', page);
+
+            const countExecuted = cachedTotalElements === null;
+            if (!countExecuted) {
+                params.set('totalElements', cachedTotalElements);
+            }
+
+            const container = document.getElementById('tableContainer');
+            container.classList.add('loading');
+
+            const startTime = performance.now();
+
+            try {
+                // Parallel: search + real count
+                const [searchRes, countRes] = await Promise.all([
+                    fetch('/api/v1/transactions?' + params.toString()).then(r => r.json()),
+                    fetch('/api/v1/lab00/real-count?' + getCountFilterParams().toString()).then(r => r.json())
+                ]);
+
+                const elapsed = Math.round(performance.now() - startTime);
+                lastResponseTime = elapsed;
+
+                if (!searchRes.success) {
+                    addLog('검색 실패: ' + searchRes.message, 'log-mismatch');
+                    return;
+                }
+
+                const data = searchRes.data;
+                const realCount = countRes.success ? countRes.data.count : null;
+
+                // Update cached value
+                if (countExecuted) {
+                    cachedTotalElements = data.totalElements;
+                    addLog(`페이지 ${page + 1} 로드, COUNT 실행, total=${formatNumber(data.totalElements)}, 응답: ${elapsed}ms`, 'log-count-exec');
+                } else {
+                    addLog(`페이지 ${page + 1} 로드, COUNT 스킵 (캐싱: ${formatNumber(cachedTotalElements)}), 응답: ${elapsed}ms`, 'log-count-skip');
+                }
+
+                totalPages = data.totalPages;
+
+                // Update status panel
+                updateStatusPanel(countExecuted, data.totalElements, realCount, elapsed);
+
+                // Render table
+                renderTable(data.content);
+
+                // Render pagination
+                renderPagination(data);
+
+            } catch (e) {
+                addLog('오류 발생: ' + e.message, 'log-mismatch');
+            } finally {
+                container.classList.remove('loading');
+            }
+        }
+
+        function updateStatusPanel(countExecuted, cachedVal, realVal, elapsed) {
+            // COUNT status badge
+            const statusEl = document.getElementById('countStatus');
+            if (countExecuted) {
+                statusEl.textContent = '실행됨';
+                statusEl.className = 'badge badge-green';
+            } else {
+                statusEl.textContent = '스킵됨';
+                statusEl.className = 'badge badge-orange';
+            }
+
+            // Cached value
+            document.getElementById('cachedValue').textContent = formatNumber(cachedVal);
+
+            // Real value
+            document.getElementById('realValue').textContent = realVal !== null ? formatNumber(realVal) : '-';
+
+            // Diff
+            const diffEl = document.getElementById('diffValue');
+            if (realVal !== null && cachedVal !== null) {
+                const diff = realVal - cachedVal;
+                if (diff === 0) {
+                    diffEl.textContent = '0 (일치)';
+                    diffEl.className = 'status-value';
+                    diffEl.style.color = '#22c55e';
+                    diffEl.classList.remove('blink');
+                } else {
+                    const sign = diff > 0 ? '+' : '';
+                    diffEl.textContent = `${sign}${formatNumber(diff)} (불일치!)`;
+                    diffEl.className = 'status-value blink';
+                    diffEl.style.color = '#ef4444';
+                    addLog(`불일치 감지! 캐싱: ${formatNumber(cachedVal)}, 실제: ${formatNumber(realVal)}, 차이: ${sign}${formatNumber(diff)}`, 'log-mismatch');
+                }
+            } else {
+                diffEl.textContent = '-';
+                diffEl.style.color = '';
+                diffEl.classList.remove('blink');
+            }
+
+            // Response time
+            document.getElementById('responseTime').textContent = elapsed + 'ms';
+        }
+
+        function renderTable(content) {
+            const tbody = document.getElementById('tableBody');
+            if (!content || content.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">조회된 데이터가 없습니다</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = content.map(tx => {
+                const isDemo = tx.businessNo && tx.businessNo.startsWith('DEMO-LAB00-');
+                const rowClass = isDemo ? 'demo-row' : '';
+                const stateStyle = tx.transactionState === 'APPROVED' ? 'color:#22c55e' :
+                                   tx.transactionState === 'CANCELLED' ? 'color:#ef4444' :
+                                   tx.transactionState === 'PENDING' ? 'color:#f59e0b' : '';
+                return `<tr class="${rowClass}">
+                    <td>${tx.id}</td>
+                    <td>${formatDateTime(tx.approveDateTime)}</td>
+                    <td style="text-align:right">${formatAmount(tx.amount)}</td>
+                    <td>${tx.businessNo}${isDemo ? ' <span style="font-size:0.7rem;color:#f59e0b">데모</span>' : ''}</td>
+                    <td>${tx.posTransactionNo}</td>
+                    <td style="${stateStyle};font-weight:600">${tx.transactionState}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderPagination(data) {
+            const container = document.getElementById('pagination');
+            if (data.totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            html += `<button class="page-btn" onclick="searchTransactions(0)" ${data.first ? 'disabled' : ''}>&laquo;</button>`;
+            html += `<button class="page-btn" onclick="searchTransactions(${data.page - 1})" ${data.first ? 'disabled' : ''}>&lsaquo;</button>`;
+
+            // Show page numbers around current
+            const start = Math.max(0, data.page - 2);
+            const end = Math.min(data.totalPages - 1, data.page + 2);
+
+            if (start > 0) {
+                html += `<button class="page-btn" onclick="searchTransactions(0)">1</button>`;
+                if (start > 1) html += `<span class="page-info">...</span>`;
+            }
+
+            for (let i = start; i <= end; i++) {
+                html += `<button class="page-btn ${i === data.page ? 'active' : ''}" onclick="searchTransactions(${i})">${i + 1}</button>`;
+            }
+
+            if (end < data.totalPages - 1) {
+                if (end < data.totalPages - 2) html += `<span class="page-info">...</span>`;
+                html += `<button class="page-btn" onclick="searchTransactions(${data.totalPages - 1})">${data.totalPages}</button>`;
+            }
+
+            html += `<span class="page-info">${data.page + 1} / ${data.totalPages}</span>`;
+            html += `<button class="page-btn" onclick="searchTransactions(${data.page + 1})" ${data.last ? 'disabled' : ''}>&rsaquo;</button>`;
+            html += `<button class="page-btn" onclick="searchTransactions(${data.totalPages - 1})" ${data.last ? 'disabled' : ''}>&raquo;</button>`;
+
+            container.innerHTML = html;
+        }
+
+        // ===== Actions =====
+        function resetAndSearch() {
+            cachedTotalElements = null;
+            addLog('필터 적용, COUNT 캐시 리셋', 'log-count-exec');
+            searchTransactions(0);
+        }
+
+        function resetFilters() {
+            document.getElementById('filterState').value = '';
+            document.getElementById('filterBusinessNo').value = '';
+            document.getElementById('filterMinAmount').value = '';
+            document.getElementById('filterMaxAmount').value = '';
+            document.getElementById('filterSize').value = '20';
+            cachedTotalElements = null;
+            addLog('필터 초기화, COUNT 캐시 리셋', 'log-count-exec');
+            searchTransactions(0);
+        }
+
+        function refreshCount() {
+            cachedTotalElements = null;
+            addLog('COUNT 캐시 수동 리셋 → 다음 조회 시 COUNT 재실행', 'log-count-exec');
+            searchTransactions(currentPage);
+        }
+
+        async function insertDemo(count) {
+            try {
+                const res = await fetch(`/api/v1/lab00/demo-data/insert/${count}`, { method: 'POST' });
+                const json = await res.json();
+                if (json.success) {
+                    addLog(`데모 데이터 ${json.data.inserted}건 추가 (캐싱값 유지: ${formatNumber(cachedTotalElements)})`, 'log-data');
+                    updateDemoCount();
+                    // Reload current page WITHOUT resetting cache (to show mismatch)
+                    searchTransactions(currentPage);
+                }
+            } catch (e) {
+                addLog('데모 데이터 추가 실패: ' + e.message, 'log-mismatch');
+            }
+        }
+
+        async function deleteDemo(count) {
+            try {
+                const res = await fetch(`/api/v1/lab00/demo-data/delete/${count}`, { method: 'DELETE' });
+                const json = await res.json();
+                if (json.success) {
+                    addLog(`데모 데이터 ${json.data.deleted}건 삭제 (캐싱값 유지: ${formatNumber(cachedTotalElements)})`, 'log-data');
+                    updateDemoCount();
+                    searchTransactions(currentPage);
+                }
+            } catch (e) {
+                addLog('데모 데이터 삭제 실패: ' + e.message, 'log-mismatch');
+            }
+        }
+
+        async function cleanupDemo() {
+            try {
+                const res = await fetch('/api/v1/lab00/demo-data/cleanup', { method: 'DELETE' });
+                const json = await res.json();
+                if (json.success) {
+                    addLog(`데모 데이터 전체 정리: ${json.data.deleted}건 삭제`, 'log-data');
+                    updateDemoCount();
+                    refreshCount();
+                }
+            } catch (e) {
+                addLog('데모 데이터 정리 실패: ' + e.message, 'log-mismatch');
+            }
+        }
+
+        async function updateDemoCount() {
+            try {
+                const res = await fetch('/api/v1/lab00/real-count?businessNo=DEMO-LAB00-');
+                const json = await res.json();
+                if (json.success) {
+                    document.getElementById('demoCount').textContent = formatNumber(json.data.count) + '건';
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        // Initial demo count load
+        updateDemoCount();
+    </script>
+</body>
+</html>
