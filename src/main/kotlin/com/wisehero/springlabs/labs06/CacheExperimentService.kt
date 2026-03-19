@@ -103,6 +103,19 @@ class CacheExperimentService(
     }
 
     /**
+     * 실험 구간의 캐시 통계를 정확히 측정하기 위해,
+     * 실험 시작 시 스냅샷을 저장하고 실험 후 차이를 계산한다.
+     * Caffeine의 recordStats() 카운터는 singleton이므로 누적되기 때문이다.
+     */
+    private fun getCaffeineStatsDelta(
+        cacheName: String,
+        baseline: com.github.benmanes.caffeine.cache.stats.CacheStats
+    ): com.github.benmanes.caffeine.cache.stats.CacheStats {
+        val current = getCaffeineStats(cacheName)
+        return current.minus(baseline)
+    }
+
+    /**
      * 지정한 캐시의 모든 엔트리를 제거한다.
      * 실험 간 캐시 상태 격리를 위해 실험 시작 시 호출.
      */
@@ -153,11 +166,21 @@ class CacheExperimentService(
         log.info("[Cache] productCache 키 삭제: id=$id")
     }
 
+    @CacheEvict(value = ["productCache"], key = "#id")
+    @Transactional
+    fun updateProductWithCacheEvict(id: Long, newStock: Int) {
+        log.debug("[Cache] productCache CacheEvict → DB 업데이트 후 캐시 삭제: id=$id")
+        val product = productRepository.findById(id).orElse(null) ?: return
+        product.stock = newStock
+    }
+
     @CachePut(value = ["productCache"], key = "#id")
-    @Transactional(readOnly = true)
-    fun updateProductCacheWithPut(id: Long): CachedProduct? {
-        log.debug("[Cache] productCache CachePut → DB 조회 후 캐시 갱신: id=$id")
-        return productRepository.findById(id).orElse(null)?.let { CachedProduct.from(it) }
+    @Transactional
+    fun updateProductWithCachePut(id: Long, newStock: Int): CachedProduct? {
+        log.debug("[Cache] productCache CachePut → DB 업데이트 후 캐시 즉시 갱신: id=$id")
+        val product = productRepository.findById(id).orElse(null) ?: return null
+        product.stock = newStock
+        return CachedProduct.from(product)
     }
 
     @Cacheable(value = ["stampedeCache"], key = "#id")
@@ -198,6 +221,7 @@ class CacheExperimentService(
         // B: @Cacheable로 100번 조회
         clearCache("productCache")
         clearStatistics()
+        val statsBaseline = getCaffeineStats("productCache")
         val cachedStart = System.currentTimeMillis()
         for (i in 1..queryCount) {
             self.findProductByIdCached(productId)
@@ -206,7 +230,7 @@ class CacheExperimentService(
         val sqlCountCached = getQueryCount()
         log.info("[6-1] 캐시 적용: SQL ${sqlCountCached}회, ${cachedDuration}ms")
 
-        val stats = getCaffeineStats("productCache")
+        val stats = getCaffeineStatsDelta("productCache", statsBaseline)
 
         return CacheResult.cacheVsNoCache(
             sqlCountNoCache = sqlCountNoCache,
@@ -235,6 +259,7 @@ class CacheExperimentService(
         val productIds = products.map { it.id!! }
 
         log.info("[6-2] 상품 ${products.size}개 생성, 캐시 통계 수집 시작")
+        val statsBaseline = getCaffeineStats("productCache")
 
         // 1차 조회: 모두 miss
         for (id in productIds) {
@@ -254,7 +279,7 @@ class CacheExperimentService(
         }
         log.info("[6-2] 3차 조회 완료 (모두 hit)")
 
-        val stats = getCaffeineStats("productCache")
+        val stats = getCaffeineStatsDelta("productCache", statsBaseline)
         log.info("[6-2] 통계: hit=${stats.hitCount()}, miss=${stats.missCount()}, hitRate=${stats.hitRate()}, eviction=${stats.evictionCount()}")
 
         return CacheResult.cacheStatistics(
@@ -283,6 +308,7 @@ class CacheExperimentService(
         val ttlSeconds = 3
 
         log.info("[6-3] 상품 생성: id=$productId, TTL=${ttlSeconds}초")
+        val statsBaseline = getCaffeineStats("ttlCache")
 
         // 1. 첫 조회 → cache miss (DB 조회)
         self.findProductByIdWithTtl(productId)
@@ -306,7 +332,7 @@ class CacheExperimentService(
         val sqlAfterExpiry = getQueryCount()
         log.info("[6-3] 만료 후 조회: SQL ${sqlAfterExpiry}회")
 
-        val stats = getCaffeineStats("ttlCache")
+        val stats = getCaffeineStatsDelta("ttlCache", statsBaseline)
 
         return CacheResult.ttlExpiration(
             sqlBeforeExpiry = sqlBeforeExpiry,
@@ -339,6 +365,7 @@ class CacheExperimentService(
         val productIds = products.map { it.id!! }
 
         log.info("[6-4] 상품 ${insertCount}개 생성, maxSize=$maxSize 캐시에 삽입")
+        val statsBaseline = getCaffeineStats("smallCache")
 
         // 10개 순차 캐싱
         for (id in productIds) {
@@ -349,7 +376,7 @@ class CacheExperimentService(
         val smallCacheNative = (cacheManager.getCache("smallCache") as CaffeineCache).nativeCache as Cache<*, *>
         smallCacheNative.cleanUp()
 
-        val stats = getCaffeineStats("smallCache")
+        val stats = getCaffeineStatsDelta("smallCache", statsBaseline)
         val remainingKeys = smallCacheNative.estimatedSize().toInt()
 
         log.info("[6-4] 삽입=${insertCount}, 퇴거=${stats.evictionCount()}, 남은 키=${remainingKeys}")
@@ -437,26 +464,26 @@ class CacheExperimentService(
         log.info("[6-6] 캐시 워밍업 완료")
 
         // === @CachePut 전략 ===
-        // 업데이트 시 @CachePut으로 캐시 즉시 갱신
+        // DB 업데이트 + 캐시 즉시 갱신 (write-through)
         clearStatistics()
-        self.updateProductCacheWithPut(putId)
+        self.updateProductWithCachePut(putId, 99999)
         val putSqlOnUpdate = getQueryCount()
-        log.info("[6-6] @CachePut 업데이트: SQL ${putSqlOnUpdate}회")
+        log.info("[6-6] @CachePut 업데이트: SQL ${putSqlOnUpdate}회 (DB 수정 + 캐시 갱신)")
 
-        // 재조회 → cache hit (SQL 0)
+        // 재조회 → cache hit (SQL 0) — 이미 캐시에 최신 값이 있음
         clearStatistics()
         self.findProductByIdCached(putId)
         val putSqlOnRead = getQueryCount()
         log.info("[6-6] @CachePut 후 재조회: SQL ${putSqlOnRead}회")
 
         // === @CacheEvict 전략 ===
-        // 업데이트 시 @CacheEvict로 캐시 삭제
+        // DB 업데이트 + 캐시 삭제 (invalidation)
         clearStatistics()
-        self.evictProductCache(evictId)
+        self.updateProductWithCacheEvict(evictId, 99999)
         val evictSqlOnUpdate = getQueryCount()
-        log.info("[6-6] @CacheEvict 업데이트: SQL ${evictSqlOnUpdate}회")
+        log.info("[6-6] @CacheEvict 업데이트: SQL ${evictSqlOnUpdate}회 (DB 수정 + 캐시 삭제)")
 
-        // 재조회 → cache miss (SQL 발생)
+        // 재조회 → cache miss (SQL 발생) — 캐시가 삭제되었으므로 DB 재조회
         clearStatistics()
         self.findProductByIdCached(evictId)
         val evictSqlOnRead = getQueryCount()
@@ -487,6 +514,7 @@ class CacheExperimentService(
         val threadCount = 100
 
         log.info("[6-7] 상품 생성: id=$productId, threads=$threadCount")
+        val statsBaseline = getCaffeineStats("stampedeCache")
 
         // 1. 캐시 워밍업 (첫 조회)
         self.findProductByIdStampedeCache(productId)
@@ -503,6 +531,7 @@ class CacheExperimentService(
         val startLatch = CountDownLatch(1)
         val doneLatch = CountDownLatch(threadCount)
         val startTime = System.currentTimeMillis()
+        var allFinished = false
 
         try {
             for (i in 0 until threadCount) {
@@ -519,7 +548,10 @@ class CacheExperimentService(
             }
 
             startLatch.countDown()
-            doneLatch.await(30, TimeUnit.SECONDS)
+            allFinished = doneLatch.await(30, TimeUnit.SECONDS)
+            if (!allFinished) {
+                log.warn("[6-7] 일부 스레드가 30초 내 완료되지 않음 — 통계가 불완전할 수 있습니다")
+            }
         } finally {
             executor.shutdown()
             if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -532,21 +564,23 @@ class CacheExperimentService(
 
         log.info("[6-7] Stampede 결과: SQL ${totalSqlCount}회, ${durationMs}ms")
 
-        val stats = getCaffeineStats("stampedeCache")
+        val stats = getCaffeineStatsDelta("stampedeCache", statsBaseline)
 
         return CacheResult.cacheStampede(
             threadCount = threadCount,
             totalSqlCount = totalSqlCount,
             durationMs = durationMs,
+            allThreadsFinished = allFinished,
             details = mapOf(
                 "productId" to productId,
                 "ttlSeconds" to 2,
                 "waitBeforeStampede" to "2.5초",
+                "allThreadsFinished" to allFinished,
                 "cacheStats" to mapOf(
                     "hitCount" to stats.hitCount(),
                     "missCount" to stats.missCount()
                 ),
-                "impact" to "TTL 만료 시 모든 스레드가 동시에 DB 조회 → Connection Pool 고갈 위험"
+                "impact" to "TTL 만료 시 캐시가 비어있으면 동시 요청이 DB로 직행 → Connection Pool 고갈 위험"
             )
         )
     }
@@ -563,6 +597,7 @@ class CacheExperimentService(
         val queryCount = 5
 
         log.info("[6-8] 상품 생성: id=$productId, 존재하지 않는 ID=$nonExistentId")
+        val statsBaseline = getCaffeineStats("conditionalCache")
 
         // 1. 존재하는 ID로 반복 조회 → 첫 조회만 miss, 이후 hit
         clearStatistics()
@@ -580,7 +615,7 @@ class CacheExperimentService(
         val nullIdSqlCount = getQueryCount()
         log.info("[6-8] 존재하지 않는 ID ${queryCount}회 조회: SQL ${nullIdSqlCount}회")
 
-        val stats = getCaffeineStats("conditionalCache")
+        val stats = getCaffeineStatsDelta("conditionalCache", statsBaseline)
 
         return CacheResult.conditionalCaching(
             cachedIdSqlCount = cachedIdSqlCount,

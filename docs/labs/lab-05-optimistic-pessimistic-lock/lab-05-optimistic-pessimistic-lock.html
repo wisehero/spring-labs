@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 05 — Optimistic Lock vs Pessimistic Lock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+:root {
+  --void: #08090e;
+  --surface: #11131a;
+  --surface2: #191c27;
+  --border: #2a2f42;
+  --text: #c8cdd8;
+  --text-bright: #eef0f6;
+  --dim: #9ca3b0;
+  --cyan: #00d4ff;
+  --cyan-dim: rgba(0,212,255,0.12);
+  --amber: #ffb800;
+  --amber-dim: rgba(255,184,0,0.12);
+  --red: #ff4d6a;
+  --red-dim: rgba(255,77,106,0.10);
+  --green: #00e68a;
+  --green-dim: rgba(0,230,138,0.10);
+  --purple: #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Ambient background */
+.ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,212,255,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(167,139,250,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 60% at 50% 50%, rgba(255,184,0,0.03) 0%, transparent 70%);
+}
+
+.page-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 28px 80px;
+}
+
+/* ── MASTHEAD ── */
+.masthead {
+  padding: 80px 0 60px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 64px;
+}
+
+.masthead-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0,212,255,0.25);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+}
+
+.masthead-tag::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.masthead h1 {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: clamp(32px, 5vw, 54px);
+  font-weight: 900;
+  color: var(--text-bright);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
+
+.masthead h1 em {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.masthead-sub {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 16px;
+  color: var(--dim);
+  max-width: 620px;
+  line-height: 1.7;
+}
+
+/* ── SECTION LABEL ── */
+.sec-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0,212,255,0.2);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 10px;
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.section {
+  margin-bottom: 72px;
+}
+
+.section-title {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 28px;
+  letter-spacing: -0.01em;
+}
+
+/* ── METRICS ROW ── */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 64px;
+}
+
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+
+.metric-card.cyan::before  { background: linear-gradient(90deg, var(--cyan), transparent); }
+.metric-card.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+.metric-card.purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+.metric-card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+
+.metric-card:hover { border-color: rgba(0,212,255,0.3); }
+
+.metric-label {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.metric-value.cyan   { color: var(--cyan); }
+.metric-value.amber  { color: var(--amber); }
+.metric-value.purple { color: var(--purple); }
+.metric-value.green  { color: var(--green); }
+
+.metric-sub {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+/* ── CORE CONCEPT CARDS ── */
+.concept-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.concept-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+}
+.concept-card.cyan  { border-top: 3px solid var(--cyan); }
+.concept-card.amber { border-top: 3px solid var(--amber); }
+
+.concept-card h3 {
+  font-family: 'D2Coding', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.concept-card.cyan  h3 { color: var(--cyan); }
+.concept-card.amber h3 { color: var(--amber); }
+
+.flow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  font-family: 'D2Coding', monospace;
+  color: var(--text);
+  line-height: 1.5;
+}
+.flow-step .arrow { color: #ffffff; flex-shrink: 0; margin-top: 1px; }
+.flow-step .ok   { color: var(--green); }
+.flow-step .fail { color: var(--red); }
+.flow-step .wait { color: var(--amber); }
+.flow-step .go   { color: var(--cyan); }
+
+.concept-badge {
+  display: inline-block;
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+.concept-badge.cyan  { background: var(--cyan-dim);  color: var(--cyan); }
+.concept-badge.amber { background: var(--amber-dim); color: var(--amber); }
+
+/* ── SIMULATOR ── */
+.simulator-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.sim-controls {
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sim-title {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  margin-right: 8px;
+}
+
+.sim-btn {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.sim-btn:hover { border-color: var(--dim); color: var(--text-bright); }
+.sim-btn.active-red   { border-color: var(--red);   color: var(--red);   background: var(--red-dim); }
+.sim-btn.active-cyan  { border-color: var(--cyan);  color: var(--cyan);  background: var(--cyan-dim); }
+.sim-btn.active-amber { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+.sim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.reset-btn {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+.reset-btn:hover { color: var(--text-bright); border-color: var(--dim); }
+
+.sim-stage {
+  padding: 32px 28px;
+  display: grid;
+  grid-template-columns: 1fr 260px 1fr;
+  gap: 20px;
+  align-items: start;
+  min-height: 320px;
+}
+
+/* Thread columns */
+.thread-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.thread-header {
+  font-family: 'D2Coding', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 8px;
+  text-align: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  transition: all 0.3s;
+}
+.thread-header.active-a { border-color: var(--cyan);   color: var(--cyan);   background: var(--cyan-dim); }
+.thread-header.active-b { border-color: var(--purple); color: var(--purple); background: var(--purple-dim); }
+.thread-header.error    { border-color: var(--red);    color: var(--red);    background: var(--red-dim); }
+.thread-header.waiting  { border-color: var(--amber);  color: var(--amber);  background: var(--amber-dim); animation: pulse-amber 1s infinite; }
+.thread-header.success  { border-color: var(--green);  color: var(--green);  background: var(--green-dim); }
+
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.thread-event {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  line-height: 1.5;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s, transform 0.4s;
+}
+.thread-event.visible { opacity: 1; transform: translateY(0); }
+.thread-event.read  { border-color: var(--cyan);   color: var(--cyan);   background: var(--cyan-dim); }
+.thread-event.write { border-color: var(--green);  color: var(--green);  background: var(--green-dim); }
+.thread-event.error { border-color: var(--red);    color: var(--red);    background: var(--red-dim); }
+.thread-event.wait  { border-color: var(--amber);  color: var(--amber);  background: var(--amber-dim); animation: pulse-amber 1s infinite; }
+.thread-event.retry { border-color: var(--purple); color: var(--purple); background: var(--purple-dim); }
+
+/* Product Box */
+.product-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.product-label {
+  font-family: 'D2Coding', monospace;
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.product-box {
+  width: 100%;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  transition: border-color 0.4s, background 0.4s;
+}
+.product-box.locked-a { border-color: var(--cyan); background: var(--cyan-dim); }
+.product-box.conflict { border-color: var(--red);  background: var(--red-dim); }
+.product-box.correct  { border-color: var(--green); background: var(--green-dim); }
+
+.product-name {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 12px;
+}
+.product-stock {
+  font-family: 'DM Serif Display', serif;
+  font-size: 3rem;
+  line-height: 1;
+  color: var(--text-bright);
+  transition: color 0.3s, transform 0.3s;
+}
+.product-stock.changed { color: var(--amber); transform: scale(1.1); }
+.product-stock.ok  { color: var(--green); transform: scale(1.1); }
+.product-stock.bad { color: var(--red);   transform: scale(1.1); }
+
+.product-version {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 8px;
+  transition: color 0.3s;
+}
+.product-version.changed { color: var(--cyan); }
+
+.product-status {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  transition: all 0.3s;
+}
+.product-status.idle     { background: var(--surface2); color: var(--dim);   border: 1px solid var(--border); }
+.product-status.locked   { background: var(--cyan-dim); color: var(--cyan);  border: 1px solid var(--cyan); }
+.product-status.conflict { background: var(--red-dim);  color: var(--red);   border: 1px solid var(--red); }
+.product-status.ok  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.product-status.bad { background: var(--red-dim);   color: var(--red);   border: 1px solid var(--red); }
+
+/* Result banner */
+.sim-result {
+  margin: 0 28px 28px;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-family: 'D2Coding', monospace;
+  font-size: 13px;
+  display: none;
+  align-items: center;
+  gap: 12px;
+}
+.sim-result.show    { display: flex; }
+.sim-result.lost    { background: var(--red-dim);   border: 1px solid var(--red);   color: var(--red); }
+.sim-result.success { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+.sim-result.retry   { background: var(--amber-dim); border: 1px solid var(--amber); color: var(--amber); }
+
+/* ── CONSOLE ── */
+.sim-console {
+  background: var(--void);
+  border-top: 1px solid var(--border);
+  padding: 20px 28px;
+}
+.console-header {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.console-header::before { content: '●'; color: var(--red); }
+.console-header::after  { content: '● ●'; color: var(--amber); letter-spacing: 4px; }
+.console-lines {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.console-line {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.console-line.visible { opacity: 1; transform: translateY(0); }
+.cl-ts   { color: var(--dim); }
+.cl-a    { color: var(--cyan); }
+.cl-b    { color: var(--purple); }
+.cl-ok   { color: var(--green); }
+.cl-err  { color: var(--red); }
+.cl-sql  { color: var(--amber); }
+.cl-info { color: var(--text); }
+
+/* ── EXPERIMENT CARDS ── */
+.exp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.exp-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.exp-card.red   { border-left: 3px solid var(--red); }
+.exp-card.cyan  { border-left: 3px solid var(--cyan); }
+.exp-card.green { border-left: 3px solid var(--green); }
+.exp-card.amber { border-left: 3px solid var(--amber); }
+
+.exp-num {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+.exp-card h4 {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1.4;
+}
+.exp-card p {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.7;
+  flex: 1;
+}
+.exp-tag {
+  display: inline-block;
+  font-family: 'D2Coding', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+.exp-tag.red    { background: var(--red-dim);    color: var(--red); }
+.exp-tag.cyan   { background: var(--cyan-dim);   color: var(--cyan); }
+.exp-tag.green  { background: var(--green-dim);  color: var(--green); }
+.exp-tag.amber  { background: var(--amber-dim);  color: var(--amber); }
+.exp-tag.purple { background: var(--purple-dim); color: var(--purple); }
+
+.exp-endpoint {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+.exp-endpoint .method      { color: var(--cyan); }
+.exp-endpoint .method.post { color: var(--amber); }
+
+/* ── DEADLOCK ── */
+.deadlock-diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+}
+
+.deadlock-threads {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 32px;
+}
+
+.dl-thread {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.dl-thread h4 {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--text-bright);
+}
+.dl-step {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--text);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+.dl-step:last-child { border-bottom: none; }
+.dl-step .lock { color: var(--amber); }
+.dl-step .wait { color: var(--red); }
+.dl-step .ok   { color: var(--green); }
+
+.dl-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 20px;
+}
+.dl-icon  { font-size: 2rem; line-height: 1; }
+.dl-label {
+  font-family: 'D2Coding', monospace;
+  font-size: 10px;
+  color: var(--red);
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+.deadlock-resolution {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+}
+.deadlock-resolution h4 {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--amber);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.resolution-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.res-step {
+  text-align: center;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.res-step .num {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.8rem;
+  color: var(--amber);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.res-step p {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ── STRATEGY TABLE ── */
+.strategy-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 32px;
+}
+.strategy-table th {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  text-transform: uppercase;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.strategy-table td {
+  font-family: 'Noto Sans KR', sans-serif;
+  padding: 14px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
+  vertical-align: top;
+}
+.strategy-table tr:last-child td { border-bottom: none; }
+.strategy-table tr:hover td { background: var(--surface2); }
+.strategy-table td:first-child { font-weight: 700; color: var(--text-bright); }
+
+.badge {
+  display: inline-block;
+  font-family: 'D2Coding', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.badge.good { background: var(--green-dim);  color: var(--green); }
+.badge.bad  { background: var(--red-dim);    color: var(--red); }
+.badge.mid  { background: var(--amber-dim);  color: var(--amber); }
+.badge.na   { background: var(--surface2);   color: var(--dim); }
+
+.recommend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.recommend-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+}
+.recommend-card h4 {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recommend-card h4::before {
+  content: '';
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.recommend-card.opt h4::before { background: var(--cyan); }
+.recommend-card.pes h4::before { background: var(--amber); }
+.recommend-card ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.recommend-card li {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  padding-left: 16px;
+  position: relative;
+  line-height: 1.5;
+}
+.recommend-card li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: #ffffff;
+  font-size: 11px;
+}
+
+/* ── CLOSER ── */
+.closer {
+  padding: 80px 0;
+  text-align: center;
+}
+.closer-quote {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  color: var(--text-bright);
+  line-height: 1.4;
+  max-width: 720px;
+  margin: 0 auto 24px;
+}
+.closer-sub {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  color: var(--dim);
+}
+.closer-line {
+  width: 64px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--purple));
+  margin: 28px auto;
+}
+.closer-meta {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 24px;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--void); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 800px) {
+  .metrics-row        { grid-template-columns: repeat(2, 1fr); }
+  .concept-grid       { grid-template-columns: 1fr; }
+  .sim-stage          { grid-template-columns: 1fr; }
+  .exp-grid           { grid-template-columns: 1fr; }
+  .recommend-grid     { grid-template-columns: 1fr; }
+  .resolution-steps   { grid-template-columns: 1fr; }
+  .deadlock-threads   { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<div class="page-wrap">
+
+  <!-- MASTHEAD -->
+  <div class="masthead">
+    <div class="masthead-tag">Lab 05 — Concurrency Control</div>
+    <h1>낙관적 락 vs 비관적 락<br><em>동시성 제어</em>의 두 전략</h1>
+    <p class="masthead-sub">Product 재고 관리 시나리오로 비교. Lost Update, @Version 충돌, SELECT FOR UPDATE, 데드락까지.</p>
+  </div>
+
+  <!-- METRICS ROW -->
+  <div class="metrics-row">
+    <div class="metric-card cyan">
+      <span class="metric-label">실험 수</span>
+      <span class="metric-value cyan">6</span>
+      <span class="metric-sub">scenarios</span>
+    </div>
+    <div class="metric-card cyan">
+      <span class="metric-label">Optimistic</span>
+      <span class="metric-value cyan" style="font-size:1.5rem; padding-top:4px;">@Version</span>
+      <span class="metric-sub">compare-and-set</span>
+    </div>
+    <div class="metric-card amber">
+      <span class="metric-label">Pessimistic</span>
+      <span class="metric-value amber" style="font-size:1.4rem; padding-top:4px;">FOR UPDATE</span>
+      <span class="metric-sub">row-level lock</span>
+    </div>
+    <div class="metric-card purple">
+      <span class="metric-label">테스트</span>
+      <span class="metric-value purple">100</span>
+      <span class="metric-sub">threads</span>
+    </div>
+  </div>
+
+  <!-- SECTION 01: CORE CONCEPTS -->
+  <div class="section">
+    <div class="sec-label">01 · 핵심 개념</div>
+    <h2 class="section-title">낙관적 락 vs 비관적 락</h2>
+
+    <div class="concept-grid">
+      <div class="concept-card cyan">
+        <div class="concept-badge cyan">Optimistic Lock</div>
+        <h3>낙관적 락 — @Version</h3>
+        <div class="flow-steps">
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>SELECT id, stock, <span class="go">version=3</span> FROM product WHERE id=1</span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>비즈니스 로직 처리 (재고 -1)</span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>UPDATE product SET stock=9, <span class="go">version=4</span><br>&nbsp;&nbsp;&nbsp;WHERE id=1 AND <span class="fail">version=3</span></span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>1 row affected? <span class="ok">성공 ✓</span></span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>0 row affected? <span class="fail">OptimisticLockException ✗</span></span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>충돌 발생 시 → <span class="wait">재시도 (Retry)</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="concept-card amber">
+        <div class="concept-badge amber">Pessimistic Lock</div>
+        <h3>비관적 락 — FOR UPDATE</h3>
+        <div class="flow-steps">
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>TX-A: SELECT ... FROM product WHERE id=1 <span class="wait">FOR UPDATE</span></span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>TX-A: <span class="ok">Row Lock 획득</span> — stock=10 읽기</span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>TX-B: SELECT ... FOR UPDATE<br>&nbsp;&nbsp;&nbsp;<span class="wait">→ WAITING...</span> (블로킹)</span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>TX-A: UPDATE stock=9 → <span class="ok">COMMIT</span> (Lock 해제)</span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>TX-B: <span class="go">깨어남</span> — 최신 stock=9 읽기</span>
+          </div>
+          <div class="flow-step">
+            <span class="arrow">→</span>
+            <span>TX-B: UPDATE stock=8 → <span class="ok">COMMIT ✓</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 02: SIMULATOR -->
+  <div class="section">
+    <div class="sec-label">02 · 시뮬레이터</div>
+    <h2 class="section-title">동시성 제어 시뮬레이터</h2>
+
+    <div class="simulator-wrapper">
+      <div class="sim-controls">
+        <span class="sim-title">SCENARIO:</span>
+        <button class="sim-btn" id="btn-none" onclick="runScenario('none')">락 없음 (Lost Update)</button>
+        <button class="sim-btn" id="btn-opt" onclick="runScenario('optimistic')">Optimistic Lock (@Version)</button>
+        <button class="sim-btn" id="btn-pes" onclick="runScenario('pessimistic')">Pessimistic Lock (FOR UPDATE)</button>
+        <button class="reset-btn" onclick="resetSim()">↺ RESET</button>
+      </div>
+
+      <div class="sim-stage">
+        <!-- Thread A -->
+        <div class="thread-col" id="col-a">
+          <div class="thread-header" id="hdr-a">Thread-A</div>
+          <div id="events-a"></div>
+        </div>
+
+        <!-- Product Box -->
+        <div class="product-col">
+          <span class="product-label">DB · Products</span>
+          <div class="product-box" id="product-box">
+            <div class="product-name">한정판 스니커즈</div>
+            <div class="product-stock" id="product-stock">10</div>
+            <div class="product-version" id="product-version">version = 0</div>
+          </div>
+          <div class="product-status idle" id="product-status">IDLE</div>
+        </div>
+
+        <!-- Thread B -->
+        <div class="thread-col" id="col-b">
+          <div class="thread-header" id="hdr-b">Thread-B</div>
+          <div id="events-b"></div>
+        </div>
+      </div>
+
+      <!-- Result Banner -->
+      <div class="sim-result" id="sim-result">
+        <span id="result-icon">⚠</span>
+        <span id="result-text"></span>
+      </div>
+
+      <!-- Console -->
+      <div class="sim-console">
+        <div class="console-header">TERMINAL — SQL LOG</div>
+        <div class="console-lines" id="console-lines"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 03: EXPERIMENTS -->
+  <div class="section">
+    <div class="sec-label">03 · 실험 목록</div>
+    <h2 class="section-title">실험 목록</h2>
+
+    <div class="exp-grid">
+      <!-- 5-1 -->
+      <div class="exp-card red">
+        <span class="exp-num">5-1</span>
+        <h4>락 없음 — Lost Update</h4>
+        <p>동시에 100개의 스레드가 재고를 차감할 때 아무 락도 사용하지 않으면 어떤 일이 벌어지는가? 최종 재고가 0이 아닌 이유.</p>
+        <span class="exp-tag red">LOST UPDATE</span>
+        <div class="exp-endpoint">
+          <span class="method post">POST</span> /api/v1/experiments/lock/5-1/no-lock-lost-update
+        </div>
+      </div>
+
+      <!-- 5-2 -->
+      <div class="exp-card cyan">
+        <span class="exp-num">5-2</span>
+        <h4>Optimistic Lock — @Version</h4>
+        <p>@Version 필드를 추가하면 Hibernate가 자동으로 WHERE version=? 조건을 붙인다. 충돌 시 OptimisticLockException 발생 확인.</p>
+        <span class="exp-tag cyan">OPTIMISTIC</span>
+        <div class="exp-endpoint">
+          <span class="method post">POST</span> /api/v1/experiments/lock/5-2/optimistic-lock
+        </div>
+      </div>
+
+      <!-- 5-3 -->
+      <div class="exp-card green">
+        <span class="exp-num">5-3</span>
+        <h4>Optimistic + Retry — Exponential Backoff</h4>
+        <p>OptimisticLockException을 잡아 지수 백오프로 재시도. 최대 200회 재시도로 100개 스레드 전부 성공하는지 검증.</p>
+        <span class="exp-tag green">RETRY</span>
+        <div class="exp-endpoint">
+          <span class="method post">POST</span> /api/v1/experiments/lock/5-3/optimistic-retry
+        </div>
+      </div>
+
+      <!-- 5-4 -->
+      <div class="exp-card amber">
+        <span class="exp-num">5-4</span>
+        <h4>Pessimistic Lock — SELECT FOR UPDATE</h4>
+        <p>LockModeType.PESSIMISTIC_WRITE로 SELECT FOR UPDATE 발행. 동시 100 스레드 실행 시 재고가 정확히 0에 수렴하는지 검증.</p>
+        <span class="exp-tag amber">PESSIMISTIC</span>
+        <div class="exp-endpoint">
+          <span class="method post">POST</span> /api/v1/experiments/lock/5-4/pessimistic-lock
+        </div>
+      </div>
+
+      <!-- 5-5 -->
+      <div class="exp-card cyan">
+        <span class="exp-num">5-5</span>
+        <h4>성능 비교 — 경합 빈도별 처리량</h4>
+        <p>10 스레드(낮은 경합) vs 100 스레드(높은 경합)로 Optimistic + Retry와 Pessimistic의 처리 시간을 비교.</p>
+        <span class="exp-tag purple">BENCHMARK</span>
+        <div class="exp-endpoint">
+          <span class="method post">POST</span> /api/v1/experiments/lock/5-5/performance-comparison
+        </div>
+      </div>
+
+      <!-- 5-6 -->
+      <div class="exp-card red">
+        <span class="exp-num">5-6</span>
+        <h4>데드락 — 순환 대기</h4>
+        <p>Thread-0은 A→B 순서로, Thread-1은 B→A 순서로 락을 획득 시도. InnoDB가 데드락을 감지하고 Undo Log 크기가 작은 트랜잭션을 victim으로 선택.</p>
+        <span class="exp-tag red">DEADLOCK</span>
+        <div class="exp-endpoint">
+          <span class="method post">POST</span> /api/v1/experiments/lock/5-6/deadlock
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 04: DEADLOCK DEEP DIVE -->
+  <div class="section">
+    <div class="sec-label">04 · 데드락 분석</div>
+    <h2 class="section-title">Deadlock 상세 분석</h2>
+
+    <div class="deadlock-diagram">
+      <div class="deadlock-threads">
+        <div class="dl-thread">
+          <h4 style="color: var(--cyan);">Thread-0</h4>
+          <div class="dl-step"><span class="ok">LOCK</span> 획득 → Product-A (stock=5)</div>
+          <div class="dl-step">비즈니스 로직 처리 중...</div>
+          <div class="dl-step"><span class="wait">LOCK 시도</span> → Product-B</div>
+          <div class="dl-step"><span class="wait">→ WAITING</span> (Thread-1이 B 보유)</div>
+          <div class="dl-step" style="color: var(--red);">→ Deadlock Victim 선택됨</div>
+          <div class="dl-step"><span style="color:var(--red);">DeadlockLoserDataAccessException</span></div>
+        </div>
+
+        <div class="dl-center">
+          <div class="dl-icon">🔄</div>
+          <div class="dl-label">순환<br>대기<br>DEADLOCK</div>
+          <div style="font-family:'D2Coding',monospace; font-size:20px; color: var(--red); margin-top: 8px;">↕</div>
+        </div>
+
+        <div class="dl-thread">
+          <h4 style="color: var(--purple);">Thread-1</h4>
+          <div class="dl-step"><span class="ok">LOCK</span> 획득 → Product-B (stock=3)</div>
+          <div class="dl-step">비즈니스 로직 처리 중...</div>
+          <div class="dl-step"><span class="wait">LOCK 시도</span> → Product-A</div>
+          <div class="dl-step"><span class="wait">→ WAITING</span> (Thread-0이 A 보유)</div>
+          <div class="dl-step" style="color: var(--green);">→ Deadlock Survivor (계속 진행)</div>
+          <div class="dl-step"><span class="ok">COMMIT ✓</span> (정상 완료)</div>
+        </div>
+      </div>
+
+      <div class="deadlock-resolution">
+        <h4>InnoDB 데드락 해소 메커니즘</h4>
+        <div class="resolution-steps">
+          <div class="res-step">
+            <div class="num">01</div>
+            <p>Wait-For Graph에서 순환 대기 감지<br>(innodb_lock_wait_timeout 이전)</p>
+          </div>
+          <div class="res-step">
+            <div class="num">02</div>
+            <p>Undo Log 크기를 기준으로<br>Victim 트랜잭션 선택 (작은 쪽)</p>
+          </div>
+          <div class="res-step">
+            <div class="num">03</div>
+            <p>Victim 강제 롤백 →<br>Survivor가 락을 획득하여 진행</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 05: STRATEGY GUIDE -->
+  <div class="section">
+    <div class="sec-label">05 · 전략 가이드</div>
+    <h2 class="section-title">전략 선택 가이드</h2>
+
+    <table class="strategy-table">
+      <thead>
+        <tr>
+          <th>구분</th>
+          <th>낙관적 락 (Optimistic)</th>
+          <th>비관적 락 (Pessimistic)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>구현 방식</td>
+          <td>@Version 필드 + WHERE version=?</td>
+          <td>SELECT ... FOR UPDATE (DB 레벨 락)</td>
+        </tr>
+        <tr>
+          <td>락 시점</td>
+          <td>COMMIT 시점에 충돌 감지</td>
+          <td>SELECT 시점에 즉시 락 획득</td>
+        </tr>
+        <tr>
+          <td>충돌 처리</td>
+          <td>OptimisticLockException → Retry</td>
+          <td>다른 TX는 대기 (Blocking)</td>
+        </tr>
+        <tr>
+          <td>낮은 경합 환경</td>
+          <td><span class="badge good">우수</span> 락 오버헤드 없음</td>
+          <td><span class="badge mid">보통</span> 불필요한 락 비용</td>
+        </tr>
+        <tr>
+          <td>높은 경합 환경</td>
+          <td><span class="badge bad">불리</span> 재시도 폭증</td>
+          <td><span class="badge good">우수</span> 순서 보장, 정확성</td>
+        </tr>
+        <tr>
+          <td>데드락 위험</td>
+          <td><span class="badge good">없음</span></td>
+          <td><span class="badge bad">존재</span> 획득 순서 관리 필요</td>
+        </tr>
+        <tr>
+          <td>DB 부하</td>
+          <td><span class="badge good">낮음</span> (충돌 없을 때)</td>
+          <td><span class="badge mid">중간</span> 락 관리 오버헤드</td>
+        </tr>
+        <tr>
+          <td>분산 환경</td>
+          <td><span class="badge good">적합</span> DB 락 불필요</td>
+          <td><span class="badge mid">주의</span> DB 연결 유지 필요</td>
+        </tr>
+        <tr>
+          <td>주요 적용 사례</td>
+          <td>상품 정보 수정, 게시글 편집, 설정 변경</td>
+          <td>재고 차감, 포인트 사용, 좌석 예약</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="recommend-grid">
+      <div class="recommend-card opt">
+        <h4>낙관적 락 추천 시나리오</h4>
+        <ul>
+          <li>동일 데이터 수정 충돌이 드문 경우 (충돌률 &lt; 10%)</li>
+          <li>사용자가 오랜 시간 편집하는 폼 기반 UI</li>
+          <li>읽기가 많고 쓰기가 적은 CRUD 서비스</li>
+          <li>마이크로서비스 간 분산 트랜잭션 불가 환경</li>
+          <li>재시도 로직 구현이 가능한 경우</li>
+        </ul>
+      </div>
+      <div class="recommend-card pes">
+        <h4>비관적 락 추천 시나리오</h4>
+        <ul>
+          <li>플래시 세일, 한정 수량 재고처럼 경합이 극심한 경우</li>
+          <li>재시도 비용이 높거나 멱등성 보장이 어려운 경우</li>
+          <li>정확한 순서 보장이 필요한 포인트/잔액 처리</li>
+          <li>트랜잭션이 짧고 빠르게 완료되는 경우</li>
+          <li>데드락 방지를 위해 획득 순서를 전역 통제 가능한 경우</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLOSER -->
+  <div class="closer">
+    <div class="closer-line"></div>
+    <p class="closer-quote">"경합 빈도에 따라 최적 전략이 달라진다"</p>
+    <p class="closer-sub">낙관적 락은 충돌이 드물 때, 비관적 락은 경합이 심할 때 빛을 발한다.<br>두 전략을 혼합해 계층별로 적용하는 것이 실무의 정답이다.</p>
+    <div class="closer-line"></div>
+    <p class="closer-meta">Lab 05 · Spring Boot 4.0.1 · Kotlin · JPA + Hibernate · MySQL 8.0 InnoDB</p>
+  </div>
+
+</div><!-- /.page-wrap -->
+
+<script>
+// ── SIMULATOR ENGINE ──────────────────────────────────────────────────────────
+
+let simRunning = false;
+let simAbort = false;
+
+function sleep(ms) {
+  return new Promise(resolve => {
+    const id = setInterval(() => {
+      if (simAbort) { clearInterval(id); resolve(); }
+    }, 50);
+    setTimeout(() => { clearInterval(id); resolve(); }, ms);
+  });
+}
+
+function resetSim() {
+  simAbort = true;
+  setTimeout(() => {
+    simAbort = false;
+    simRunning = false;
+
+    // Product box
+    document.getElementById('product-stock').textContent = '10';
+    document.getElementById('product-stock').className = 'product-stock';
+    document.getElementById('product-version').textContent = 'version = 0';
+    document.getElementById('product-version').className = 'product-version';
+    document.getElementById('product-box').className = 'product-box';
+    document.getElementById('product-status').className = 'product-status idle';
+    document.getElementById('product-status').textContent = 'IDLE';
+
+    // Thread headers
+    document.getElementById('hdr-a').className = 'thread-header';
+    document.getElementById('hdr-b').className = 'thread-header';
+
+    // Events
+    document.getElementById('events-a').innerHTML = '';
+    document.getElementById('events-b').innerHTML = '';
+
+    // Console
+    document.getElementById('console-lines').innerHTML = '';
+
+    // Result
+    const r = document.getElementById('sim-result');
+    r.className = 'sim-result';
+    r.textContent = '';
+
+    // Buttons
+    ['btn-none','btn-opt','btn-pes'].forEach(id => {
+      const b = document.getElementById(id);
+      b.disabled = false;
+      b.className = 'sim-btn';
+    });
+  }, 100);
+}
+
+function addEvent(col, text, cls) {
+  const container = document.getElementById('events-' + col);
+  const el = document.createElement('div');
+  el.className = 'thread-event ' + (cls || '');
+  el.textContent = text;
+  container.appendChild(el);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { el.classList.add('visible'); });
+  });
+  return el;
+}
+
+function log(parts) {
+  const container = document.getElementById('console-lines');
+  const line = document.createElement('div');
+  line.className = 'console-line';
+  line.innerHTML = parts;
+  container.appendChild(line);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      line.classList.add('visible');
+      container.scrollTop = container.scrollHeight;
+    });
+  });
+}
+
+function setStock(val, cls) {
+  const el = document.getElementById('product-stock');
+  el.textContent = val;
+  el.className = 'product-stock ' + (cls || '');
+}
+
+function setVersion(val) {
+  const el = document.getElementById('product-version');
+  el.textContent = 'version = ' + val;
+  el.className = 'product-version changed';
+}
+
+function setProductBox(cls) {
+  document.getElementById('product-box').className = 'product-box ' + (cls || '');
+}
+
+function setStatus(text, cls) {
+  const el = document.getElementById('product-status');
+  el.textContent = text;
+  el.className = 'product-status ' + (cls || 'idle');
+}
+
+function setHdr(col, cls) {
+  document.getElementById('hdr-' + col).className = 'thread-header ' + (cls || '');
+}
+
+function showResult(text, cls) {
+  const el = document.getElementById('sim-result');
+  el.className = 'sim-result show ' + cls;
+  el.innerHTML = text;
+}
+
+function setActiveBtn(id, cls) {
+  ['btn-none','btn-opt','btn-pes'].forEach(b => {
+    document.getElementById(b).disabled = true;
+    document.getElementById(b).className = 'sim-btn';
+  });
+  document.getElementById(id).className = 'sim-btn ' + cls;
+}
+
+async function runScenario(type) {
+  if (simRunning) return;
+  resetSim();
+  await sleep(200);
+  simRunning = true;
+
+  if (type === 'none') await scenarioNone();
+  else if (type === 'optimistic') await scenarioOptimistic();
+  else if (type === 'pessimistic') await scenarioPessimistic();
+
+  simRunning = false;
+}
+
+// ── SCENARIO 1: NO LOCK ───────────────────────────────────────────────────────
+async function scenarioNone() {
+  setActiveBtn('btn-none', 'active-red');
+
+  log('<span class="cl-ts">[00:00]</span> <span class="cl-info">시나리오: 락 없음 (No Lock)</span>');
+  await sleep(600);
+
+  // Both threads read simultaneously
+  setHdr('a', 'active-a');
+  setHdr('b', 'active-b');
+  addEvent('a', 'READ: stock=10', 'read');
+  addEvent('b', 'READ: stock=10', 'read');
+  setStatus('READ × 2', 'locked');
+
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">SELECT stock FROM product WHERE id=1</span>');
+  await sleep(300);
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT stock FROM product WHERE id=1</span>');
+  await sleep(800);
+
+  // Thread-A writes first
+  addEvent('a', 'WRITE: stock=10-1=9', 'write');
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">UPDATE product SET stock=9 WHERE id=1</span>');
+  await sleep(500);
+  setStock('9', 'changed');
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ COMMIT (stock=9) ✓</span>');
+  setHdr('a', 'success');
+  await sleep(700);
+
+  // Thread-B overwrites with wrong value
+  addEvent('b', 'WRITE: stock=10-1=9', 'write');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">UPDATE product SET stock=9 WHERE id=1</span>');
+  await sleep(500);
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-ok">→ COMMIT (stock=9) — A의 차감을 덮어씀!</span>');
+  setHdr('b', 'success');
+  await sleep(600);
+
+  setStock('9', 'bad');
+  setProductBox('conflict');
+  setStatus('LOST UPDATE!', 'bad');
+
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-err">⚠ LOST UPDATE 발생! 2번 차감했지만 최종 재고=9 (기대값: 8)</span>');
+
+  showResult(
+    '⚠ LOST UPDATE — 2번 차감했지만 stock=9 (기대: 8). Thread-B가 Thread-A의 수정을 덮어씌움.',
+    'lost'
+  );
+}
+
+// ── SCENARIO 2: OPTIMISTIC LOCK ───────────────────────────────────────────────
+async function scenarioOptimistic() {
+  setActiveBtn('btn-opt', 'active-cyan');
+
+  log('<span class="cl-ts">[00:00]</span> <span class="cl-info">시나리오: Optimistic Lock (@Version)</span>');
+  await sleep(600);
+
+  // Both read with version
+  setHdr('a', 'active-a');
+  setHdr('b', 'active-b');
+  addEvent('a', 'READ: stock=10, ver=0', 'read');
+  addEvent('b', 'READ: stock=10, ver=0', 'read');
+  setStatus('READ × 2', 'locked');
+
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">SELECT stock, version FROM product WHERE id=1</span>');
+  await sleep(300);
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT stock, version FROM product WHERE id=1</span>');
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-info">→ 둘 다 stock=10, version=0 조회</span>');
+  await sleep(900);
+
+  // Thread-A updates successfully
+  addEvent('a', 'UPDATE WHERE ver=0 → ✓ 1 row', 'write');
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">UPDATE product SET stock=9, version=1 WHERE id=1 AND version=0</span>');
+  await sleep(500);
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ 1 row affected. COMMIT ✓</span>');
+  setStock('9', 'changed');
+  setVersion('1');
+  setHdr('a', 'success');
+  await sleep(700);
+
+  // Thread-B fails
+  addEvent('b', 'UPDATE WHERE ver=0 → ✗ 0 rows!', 'error');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">UPDATE product SET stock=9, version=1 WHERE id=1 AND version=0</span>');
+  await sleep(500);
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-err">→ 0 rows affected! (version이 이미 1로 변경됨)</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-err">→ OptimisticLockException 발생 → ROLLBACK</span>');
+  setHdr('b', 'error');
+  await sleep(500);
+
+  addEvent('b', '↺ Retry 필요', 'retry');
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-info">→ 재시도: SELECT 재조회 후 version=1로 다시 시도</span>');
+
+  setProductBox('locked-a');
+  setStatus('CONFLICT', 'conflict');
+
+  showResult(
+    '↺ Thread-B OptimisticLockException → Retry 필요. stock=9, version=1. Thread-B는 재시도 시 올바른 최신값 사용.',
+    'retry'
+  );
+}
+
+// ── SCENARIO 3: PESSIMISTIC LOCK ─────────────────────────────────────────────
+async function scenarioPessimistic() {
+  setActiveBtn('btn-pes', 'active-amber');
+
+  log('<span class="cl-ts">[00:00]</span> <span class="cl-info">시나리오: Pessimistic Lock (SELECT FOR UPDATE)</span>');
+  await sleep(600);
+
+  // Thread-A acquires lock
+  setHdr('a', 'active-a');
+  addEvent('a', 'SELECT FOR UPDATE → Lock 획득!', 'read');
+  setProductBox('locked-a');
+  setStatus('LOCKED by A', 'locked');
+
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">SELECT stock FROM product WHERE id=1 FOR UPDATE</span>');
+  await sleep(500);
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ Row Lock 획득. stock=10 읽기</span>');
+  await sleep(700);
+
+  // Thread-B tries to acquire lock — BLOCKED
+  setHdr('b', 'waiting');
+  addEvent('b', 'SELECT FOR UPDATE → WAITING...', 'wait');
+
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT stock FROM product WHERE id=1 FOR UPDATE</span>');
+  await sleep(300);
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-err">→ BLOCKED! Thread-A가 Row Lock 보유 중 — 대기...</span>');
+  await sleep(1000);
+
+  // Thread-A processes and commits
+  addEvent('a', 'UPDATE stock=9 → COMMIT', 'write');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">UPDATE product SET stock=9 WHERE id=1</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ COMMIT → Row Lock 해제</span>');
+  setStock('9', 'changed');
+  setHdr('a', 'success');
+  await sleep(700);
+
+  // Thread-B wakes up
+  setHdr('b', 'active-b');
+  addEvent('b', 'Lock 획득! stock=9 읽기 (최신!)', 'read');
+  setStatus('LOCKED by B', 'locked');
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-ok">→ Lock 획득! 최신 stock=9 읽기</span>');
+  await sleep(700);
+
+  // Thread-B updates
+  addEvent('b', 'UPDATE stock=8 → COMMIT', 'write');
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">UPDATE product SET stock=8 WHERE id=1</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-ok">→ COMMIT ✓</span>');
+
+  setStock('8', 'ok');
+  setProductBox('correct');
+  setStatus('CORRECT ✓', 'ok');
+  setHdr('b', 'success');
+
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-ok">✓ 최종 stock=8 — 2번 차감 정상 반영. 데이터 정합성 보장.</span>');
+
+  showResult(
+    '✓ CORRECT — stock=8. 두 번의 차감이 순서대로 정확히 반영됨. SELECT FOR UPDATE가 직렬화를 보장.',
+    'success'
+  );
+}
+</script>
+</body>
+</html>

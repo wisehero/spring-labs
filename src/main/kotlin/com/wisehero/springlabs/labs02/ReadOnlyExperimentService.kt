@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.util.UUID
 
 /**
  * ==========================================
@@ -69,69 +70,70 @@ class ReadOnlyExperimentService(
         return result
     }
 
-    @Transactional
-    fun setupTestTransaction(): Long {
-        val tx = Transaction(
-            approveDateTime = LocalDateTime.now(),
-            amount = BigDecimal("50000"),
-            businessNo = "READONLY-TEST",
-            posTransactionNo = "READONLY-POS-001",
-            paymentTransactionGuidNo = "readonly-guid-001",
-            spareTransactionGuidNo = "readonly-spare-001",
-            transactionState = "APPROVED"
-        )
-        return transactionRepository.save(tx).id!!
-    }
-
     @Transactional(readOnly = true)
-    fun experimentReadOnlyWithModification(transactionId: Long): Map<String, Any?> {
-        log.info("========== 실험 2-B: readOnly에서 수정 시도 ==========")
+    fun experimentReadOnlyPersistAndVerify(): Map<String, Any?> {
+        log.info("========== 실험 2-B: readOnly에서 persist 후 커밋 결과 검증 ==========")
 
         val result = mutableMapOf<String, Any?>()
-
-        val transaction = transactionRepository.findById(transactionId).orElse(null)
-
-        if (transaction == null) {
-            result["error"] = "Transaction not found: $transactionId"
-            return result
-        }
-
-        val originalAmount = transaction.amount
-        log.info("원본 금액: $originalAmount")
-
-        result["original_amount"] = originalAmount
+        val runId = UUID.randomUUID().toString().substring(0, 8)
+        val businessNo = "READONLY-2B-$runId"
 
         val session = entityManager.unwrap(Session::class.java)
-        val flushModeBefore = session.hibernateFlushMode
+        val flushMode = session.hibernateFlushMode
 
-        log.info("수정 전 FlushMode: $flushModeBefore")
-        result["flush_mode_before"] = flushModeBefore.toString()
+        log.info("FlushMode: $flushMode")
+        log.info("이번 실행 식별자: $businessNo")
+        result["flush_mode"] = flushMode.toString()
+        result["session_default_readonly"] = session.isDefaultReadOnly
+        result["run_business_no"] = businessNo
 
-        try {
-            log.info("JPQL UPDATE 시도 (readOnly 트랜잭션에서)...")
-            val updated = entityManager.createQuery(
-                "UPDATE Transaction t SET t.amount = :newAmount WHERE t.id = :id"
-            )
-                .setParameter("newAmount", BigDecimal("99999.99"))
-                .setParameter("id", transactionId)
-                .executeUpdate()
-            result["jpql_update"] = "성공 (${updated}건)"
-            log.info("JPQL UPDATE 성공: ${updated}건")
-        } catch (e: Exception) {
-            result["jpql_update"] = "실패: ${e.javaClass.simpleName}"
-            log.info("JPQL UPDATE 실패: ${e.javaClass.simpleName} - ${e.message}")
-        }
+        // readOnly=true 트랜잭션에서 새 엔티티를 persist한다.
+        // FlushMode=MANUAL이므로 트랜잭션 커밋 시 자동 flush가 발생하지 않아야 한다.
+        val newTx = Transaction(
+            approveDateTime = LocalDateTime.now(),
+            amount = BigDecimal("99999.99"),
+            businessNo = businessNo,
+            posTransactionNo = "readonly-pos-2b-$runId",
+            paymentTransactionGuidNo = "readonly-pay-2b-$runId",
+            spareTransactionGuidNo = "readonly-spare-2b-$runId",
+            transactionState = "테스트"
+        )
 
-        entityManager.clear()
-        val dbAmount = transactionRepository.findById(transactionId).orElse(null)?.amount
-        result["db_amount_after"] = dbAmount
-        result["amount_changed"] = dbAmount != originalAmount
-        log.info("DB 재조회 금액: $dbAmount (원본: $originalAmount)")
+        log.info("persist() 호출...")
+        entityManager.persist(newTx)
+        result["persist_result"] = "성공 (예외 없음 — 1차 캐시에 저장됨)"
+        log.info("persist() 성공 — 엔티티가 1차 캐시에 저장됨")
 
-        log.info("========== 실험 2-B: 결과 ==========")
-        log.info("readOnly=true -> FlushMode=MANUAL, JPQL UPDATE 시도 시 TransactionRequiredException 또는 무시")
+        // 이 메서드가 리턴되면 @Transactional이 트랜잭션을 커밋한다.
+        // FlushMode=MANUAL이면 커밋 시점에도 자동 flush가 발생하지 않으므로
+        // persist된 엔티티는 DB에 반영되지 않아야 한다.
+        // → 실제 검증은 컨트롤러에서 이 트랜잭션 커밋 후 재조회로 수행한다.
+
+        log.info("========== 실험 2-B: 트랜잭션 커밋 대기 — 커밋 후 재조회로 결과 검증 예정 ==========")
 
         return result
+    }
+
+    /**
+     * 실험 2-B 검증용: 커밋 완료 후 별도 트랜잭션에서 DB 반영 여부를 재조회한다.
+     */
+    @Transactional(readOnly = true)
+    fun verifyNotFlushed(businessNo: String): Map<String, Any?> {
+        val found = transactionRepository.findAll()
+            .filter { it.businessNo == businessNo }
+
+        val persisted = found.isNotEmpty()
+
+        if (persisted) {
+            log.info("검증 결과: DB에 반영됨! (found ${found.size}건, businessNo=$businessNo)")
+        } else {
+            log.info("검증 결과: DB에 반영되지 않음 (0건, businessNo=$businessNo)")
+        }
+
+        return mapOf(
+            "db_found_count" to found.size,
+            "actually_persisted" to persisted
+        )
     }
 
     @Transactional(readOnly = true)
@@ -198,46 +200,73 @@ class ReadOnlyExperimentService(
     }
 
     @Transactional(readOnly = true)
-    fun experimentReadOnlyWithPersist(): Map<String, Any?> {
-        log.info("========== 실험 2-D: readOnly에서 persist 시도 ==========")
+    fun experimentReadOnlyWithExplicitFlush(): Map<String, Any?> {
+        log.info("========== 실험 2-D: readOnly에서 명시적 flush 동작 확인 ==========")
 
         val result = mutableMapOf<String, Any?>()
+        val runId = UUID.randomUUID().toString().substring(0, 8)
+        val businessNo = "READONLY-2D-$runId"
 
         val session = entityManager.unwrap(Session::class.java)
-        log.info("🔧 FlushMode: ${session.hibernateFlushMode}")
+        val flushMode = session.hibernateFlushMode
+        log.info("FlushMode: $flushMode")
+        log.info("이번 실행 식별자: $businessNo")
+        result["flush_mode"] = flushMode.toString()
+        result["run_business_no"] = businessNo
 
         val newTransaction = Transaction(
             approveDateTime = LocalDateTime.now(),
             amount = BigDecimal("99999.99"),
-            businessNo = "TEST-READONLY",
-            posTransactionNo = "READONLY-TEST-001",
-            paymentTransactionGuidNo = "test-guid-readonly",
-            spareTransactionGuidNo = "test-spare-readonly",
+            businessNo = businessNo,
+            posTransactionNo = "READONLY-TEST-2D-$runId",
+            paymentTransactionGuidNo = "test-guid-readonly-2d-$runId",
+            spareTransactionGuidNo = "test-spare-readonly-2d-$runId",
             transactionState = "TEST"
         )
 
         try {
-            log.info("⚠️ persist 시도...")
+            log.info("persist() 호출...")
             entityManager.persist(newTransaction)
-            log.info("✅ persist 호출 성공! (아직 DB에 반영 안됨)")
+            log.info("persist() 성공 — 1차 캐시에 저장됨")
             result["persist_call"] = "성공"
 
-            log.info("⚠️ flush 시도...")
+            // 핵심: FlushMode=MANUAL이어도 명시적 flush()는 차단되는가?
+            log.info("명시적 flush() 호출...")
             entityManager.flush()
-            log.info("❓ flush도 성공?!")
-            result["flush_call"] = "성공 (예상 외!)"
+            log.info("flush() 성공 — INSERT SQL이 DB로 전송됨")
+            result["explicit_flush_call"] = "성공"
             result["new_id"] = newTransaction.id
 
         } catch (e: Exception) {
-            log.error("❌ 실패: ${e.javaClass.simpleName} - ${e.message}")
+            log.error("실패: ${e.javaClass.simpleName} - ${e.message}")
             result["error"] = "${e.javaClass.simpleName}: ${e.message}"
         }
 
-        log.info("========== 실험 2-D: 결과 ==========")
-        log.info("💡 readOnly=true여도 persist() 자체는 예외 없이 호출 가능!")
-        log.info("💡 하지만 트랜잭션 커밋 시점에 flush되지 않을 수 있음")
+        // 이 메서드가 리턴된 후 커밋/롤백 결과는 컨트롤러에서 재조회로 검증한다.
 
         return result
+    }
+
+    /**
+     * 실험 2-D 검증용: 커밋 완료 후 별도 트랜잭션에서 명시적 flush된 데이터의 DB 잔존 여부를 확인한다.
+     */
+    @Transactional(readOnly = true)
+    fun verifyExplicitFlushResult(businessNo: String): Map<String, Any?> {
+        val found = transactionRepository.findAll()
+            .filter { it.businessNo == businessNo }
+
+        val persisted = found.isNotEmpty()
+
+        if (persisted) {
+            log.info("검증 결과: 명시적 flush 데이터가 DB에 남아있음 (${found.size}건, businessNo=$businessNo)")
+        } else {
+            log.info("검증 결과: 명시적 flush 데이터가 DB에 없음 (businessNo=$businessNo)")
+        }
+
+        return mapOf(
+            "db_found_count" to found.size,
+            "actually_persisted" to persisted
+        )
     }
 
     @Transactional(readOnly = true)
@@ -258,13 +287,10 @@ class ReadOnlyExperimentService(
 
         val session = entityManager.unwrap(Session::class.java)
 
-        // 명시적으로 session.defaultReadOnly 설정
-        // Spring Boot 4 / Hibernate 7에서 @Transactional(readOnly=true)가 자동 설정하지 않으며,
-        // OSIV로 인해 이전 트랜잭션의 세션 상태가 유지될 수 있으므로 양쪽 모두 명시적으로 설정
-        session.isDefaultReadOnly = readOnly
-
-        log.info("session_default_readonly: ${session.isDefaultReadOnly}")
-        log.info("FlushMode: ${session.hibernateFlushMode}")
+        // @Transactional(readOnly=true/false)가 자동 설정한 세션 상태를 그대로 관찰한다.
+        // 수동으로 session.isDefaultReadOnly를 조작하지 않는다 — 어노테이션의 효과를 측정하는 것이 실험 목적이다.
+        log.info("session_default_readonly (어노테이션에 의해 설정됨): ${session.isDefaultReadOnly}")
+        log.info("FlushMode (어노테이션에 의해 설정됨): ${session.hibernateFlushMode}")
 
         // GC 2회 + 대기로 측정 안정화
         System.gc()

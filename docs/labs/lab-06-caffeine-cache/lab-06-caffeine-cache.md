@@ -2,14 +2,9 @@
 
 ## 개요
 
-Spring Cache 추상화 + Caffeine을 활용한 로컬 캐시의 동작 원리와 성능 최적화를 8개 실험으로 검증합니다.
+Spring Cache 추상화 + Caffeine을 활용한 로컬 캐시의 동작 원리와 성능을 8개 실험으로 검증한다.
 
-### 왜 캐시가 중요한가?
-
-- **DB 부하 감소**: 반복 조회 쿼리를 메모리에서 즉시 반환
-- **응답 시간 단축**: Network I/O + SQL 파싱 + 디스크 I/O를 제거
-- **Connection Pool 보호**: 불필요한 DB 커넥션 점유 방지
-- **실무 필수**: 상품 목록, 카테고리, 설정 값 등 읽기 비율이 높은 데이터에 필수
+캐시는 반복 조회 쿼리를 메모리에서 즉시 반환하여 DB 부하를 줄이고, Network I/O + SQL 파싱 + 디스크 I/O를 제거하여 응답 시간을 단축한다. 상품 목록, 카테고리, 설정 값 등 읽기 비율이 높은 데이터에서 DB 커넥션 점유를 방지하는 데 쓰인다.
 
 ---
 
@@ -46,7 +41,7 @@ Spring Cache 추상화 + Caffeine을 활용한 로컬 캐시의 동작 원리와
 
 ### Caffeine Window TinyLFU 알고리즘
 
-Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용합니다:
+Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용한다:
 
 ```
 새 항목 → [Admission Window (1%)] → [Probationary Segment] → [Protected Segment]
@@ -84,7 +79,7 @@ Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용합니다:
 | `stampedeCache` | 실험 6-7: Stampede | - | 2초 | O |
 | `conditionalCache` | 실험 6-8: 조건부 | 100 | 5분 | O |
 
-`SimpleCacheManager`로 각 `CaffeineCache` 인스턴스를 개별 등록하여, 캐시별 독립적인 정책을 적용합니다.
+`SimpleCacheManager`로 각 `CaffeineCache` 인스턴스를 개별 등록하여, 캐시별 독립적인 정책을 적용한다.
 
 ---
 
@@ -176,7 +171,7 @@ TTL 만료 후 get() 호출:
   4. DB 조회 → 새 값 캐시에 저장 (writeTime 갱신)
 ```
 
-**주의**: Caffeine의 만료는 **lazy** 방식입니다. 백그라운드 스레드가 아니라 **다음 접근 시점**에 만료를 확인합니다.
+**주의**: Caffeine의 만료는 **lazy** 방식이다. 백그라운드 스레드가 아니라 **다음 접근 시점**에 만료를 확인한다.
 (단, `Caffeine.scheduler()`를 설정하면 능동적 만료도 가능)
 
 - **예상 결과**: 만료 전 SQL 0회, 3.5초 대기 후 SQL 1회
@@ -240,32 +235,32 @@ maximumSize(5) 설정 시:
 **내부 동작 원리**:
 
 ```
-[@CachePut 전략]
-  업데이트 호출 → 메서드 항상 실행 (SQL 1) → 결과를 캐시에 덮어쓰기
+[@CachePut 전략 — Write-Through]
+  업데이트 호출 → DB 수정 + 캐시 즉시 갱신 (SQL 1: SELECT + UPDATE)
   재조회 → Cache HIT (SQL 0) → 즉시 반환
-  총 SQL: 1회
+  총 SQL: 업데이트 1회 + 재조회 0회
 
-[@CacheEvict 전략]
-  업데이트 호출 → 캐시에서 키 삭제 (SQL 0)
-  재조회 → Cache MISS (SQL 1) → DB 조회 → 캐시 저장
-  총 SQL: 1회
+[@CacheEvict 전략 — Invalidation]
+  업데이트 호출 → DB 수정 + 캐시 삭제 (SQL 1: SELECT + UPDATE)
+  재조회 → Cache MISS (SQL 1) → DB 재조회 → 캐시 저장
+  총 SQL: 업데이트 1회 + 재조회 1회
 
 비교:
-  CachePut  = 업데이트 시점에 DB 1회 → 이후 읽기 무료
-  CacheEvict = 업데이트 시 DB 0회 → 첫 읽기 시 DB 1회 (lazy)
+  CachePut  = DB 수정 + 캐시 즉시 갱신 → 이후 읽기 무료 (write-through)
+  CacheEvict = DB 수정 + 캐시 삭제 → 첫 읽기 시 DB 재조회 (invalidation)
 ```
 
-| 전략 | 업데이트 시 SQL | 재조회 시 SQL | 장점 | 단점 |
-|------|----------------|-------------|------|------|
-| @CachePut | 1 (항상 실행) | 0 | 즉시 일관성 | 불필요한 실행 가능 |
-| @CacheEvict | 0 | 1 (lazy) | 단순함 | 첫 읽기 지연 |
+| 전략 | 업데이트 시 | 재조회 시 SQL | 장점 | 단점 |
+|------|-----------|-------------|------|------|
+| @CachePut | DB 수정 + 캐시 즉시 갱신 | 0 | 즉시 일관성 (write-through) | 항상 메서드 실행 |
+| @CacheEvict | DB 수정 + 캐시 삭제 | 1 (lazy reload) | 단순함 (invalidation) | 첫 읽기 지연 |
 
-- **의미**: 읽기 빈도가 높으면 `@CachePut`, 업데이트 빈도가 높으면 `@CacheEvict`가 유리
+- **의미**: 두 전략 모두 DB를 실제 수정한다. 차이는 캐시 일관성 전략: `@CachePut`은 write-through(즉시 갱신), `@CacheEvict`는 invalidation(지연 로드)
 
 ### 실험 6-7: Cache Stampede (Thundering Herd)
 
 - **엔드포인트**: `POST /api/v1/experiments/cache/6-7/cache-stampede`
-- **동작**: TTL 만료 후 100 스레드 동시 조회로 DB 폭주 관찰
+- **동작**: TTL 만료 후 다수 스레드 동시 조회로 DB 폭주 관찰
 
 **내부 동작 원리**:
 
@@ -276,10 +271,10 @@ TTL 만료 시점의 동시 요청 시나리오:
   Thread-2 → Cache.get(key) → MISS → DB 조회 시작...  (Thread-1 아직 진행 중)
   Thread-3 → Cache.get(key) → MISS → DB 조회 시작...
   ...
-  Thread-100 → Cache.get(key) → MISS → DB 조회 시작...
+  Thread-N → Cache.get(key) → MISS → DB 조회 시작...
 
-  → 100개 스레드 모두 동시에 같은 SQL 실행!
-  → Connection Pool 100개 커넥션 동시 점유
+  → 다수의 스레드가 동시에 같은 SQL 실행
+  → Connection Pool 커넥션 동시 점유
   → DB CPU/IO 급증
 ```
 
@@ -293,7 +288,7 @@ TTL 만료 시점의 동시 요청 시나리오:
 2. **Probabilistic Early Expiration**: TTL 만료 전에 확률적으로 갱신
 3. **Background Refresh**: 별도 스레드가 TTL 만료 전에 미리 갱신
 
-- **예상 결과**: SQL ~100회 (100 스레드 모두 DB 직행)
+- **예상 결과**: SQL이 스레드 수에 근접하게 발생 (TTL 만료 시 캐시 미스로 다수 스레드가 DB 직행)
 - **의미**: 단순 `@Cacheable`만으로는 Stampede를 방지할 수 없음
 
 ### 실험 6-8: 조건부 캐싱

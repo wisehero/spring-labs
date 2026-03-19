@@ -116,9 +116,9 @@ data class CacheResult(
             return CacheResult(
                 experimentId = "6-6",
                 experimentName = "@CachePut vs @CacheEvict",
-                description = "업데이트 시 @CachePut(즉시 갱신) vs @CacheEvict(지연 로드) 전략 비교",
+                description = "DB 업데이트 후 캐시 일관성 전략 비교: @CachePut(write-through 즉시 갱신) vs @CacheEvict(invalidation 지연 로드)",
                 details = details,
-                conclusion = "@CachePut: 업데이트 SQL ${putSqlOnUpdate}회 + 재조회 SQL ${putSqlOnRead}회 (즉시 갱신). @CacheEvict: 업데이트 SQL ${evictSqlOnUpdate}회 + 재조회 SQL ${evictSqlOnRead}회 (lazy reload). CachePut은 항상 메서드를 실행하고 결과를 캐시합니다."
+                conclusion = "@CachePut: DB 수정 + 캐시 즉시 갱신 SQL ${putSqlOnUpdate}회 → 재조회 SQL ${putSqlOnRead}회 (cache hit). @CacheEvict: DB 수정 + 캐시 삭제 SQL ${evictSqlOnUpdate}회 → 재조회 SQL ${evictSqlOnRead}회 (cache miss → DB). CachePut은 write-through로 즉시 일관성을, CacheEvict는 invalidation으로 지연 일관성을 제공합니다."
             )
         }
 
@@ -126,8 +126,10 @@ data class CacheResult(
             threadCount: Int,
             totalSqlCount: Long,
             durationMs: Long,
+            allThreadsFinished: Boolean,
             details: Map<String, Any>
         ): CacheResult {
+            val completionNote = if (!allThreadsFinished) " (일부 스레드 타임아웃 — 통계 불완전)" else ""
             return CacheResult(
                 experimentId = "6-7",
                 experimentName = "Cache Stampede (Thundering Herd)",
@@ -135,7 +137,7 @@ data class CacheResult(
                 sqlCountCached = totalSqlCount,
                 durationCachedMs = durationMs,
                 details = details,
-                conclusion = "${threadCount}개 스레드 동시 조회 → SQL ${totalSqlCount}회 발생. TTL 만료 시 캐시가 비어있어 모든 스레드가 DB로 직행합니다. 이는 Connection Pool 고갈로 이어질 수 있습니다."
+                conclusion = "${threadCount}개 스레드 동시 조회 → SQL ${totalSqlCount}회 발생${completionNote}. TTL 만료 시 캐시가 비어있으면 다수의 스레드가 DB로 직행하며, 이는 Connection Pool 고갈로 이어질 수 있습니다."
             )
         }
 

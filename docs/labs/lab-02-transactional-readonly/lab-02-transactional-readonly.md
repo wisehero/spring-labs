@@ -2,7 +2,7 @@
 
 ## 개요
 
-`@Transactional(readOnly = true)`가 실제로 무엇을 하는지, 어떤 최적화가 적용되는지 실험합니다.
+`@Transactional(readOnly = true)`가 실제로 무엇을 하는지, 어떤 최적화가 적용되는지 실험한다.
 
 ## 핵심 개념
 
@@ -52,38 +52,39 @@ fun experimentReadOnlyStatus(): Map<String, Any?> {
 }
 ```
 
-### 실험 B: readOnly에서 수정 시도
+### 실험 B: readOnly에서 persist 후 커밋 결과 검증
+
+readOnly=true 트랜잭션에서 persist한 엔티티가 커밋 후 실제로 DB에 반영되는지를 **재조회로 검증**한다.
 
 ```kotlin
+// 1단계: readOnly 트랜잭션에서 persist (auto-flush 없이 커밋)
 @Transactional(readOnly = true)
-fun experimentReadOnlyWithModification(transactionId: Long): Map<String, Any?> {
-    val result = mutableMapOf<String, Any?>()
-    val transaction = transactionRepository.findById(transactionId).orElse(null)
-        ?: return mapOf("error" to "Transaction not found")
-    val originalAmount = transaction.amount
-    result["original_amount"] = originalAmount
-    
-    // readOnly 트랜잭션에서 JPQL UPDATE 시도
-    try {
-        val updated = entityManager.createQuery(
-            "UPDATE Transaction t SET t.amount = :newAmount WHERE t.id = :id"
-        )
-            .setParameter("newAmount", BigDecimal("99999.99"))
-            .setParameter("id", transactionId)
-            .executeUpdate()
-        
-        result["jpql_update"] = "성공 (${updated}건)"
-    } catch (e: Exception) {
-        result["jpql_update"] = "실패: ${e.javaClass.simpleName}"
-    }
+fun experimentReadOnlyPersistAndVerify(): Map<String, Any?> {
+    val runId = UUID.randomUUID().toString().substring(0, 8)
+    val businessNo = "READONLY-2B-$runId"  // 실행별 고유 식별자
 
-    entityManager.clear()
-    val dbAmount = transactionRepository.findById(transactionId).orElse(null)?.amount
-    result["db_amount_after"] = dbAmount
-    result["amount_changed"] = dbAmount != originalAmount
-    return result
+    val session = entityManager.unwrap(Session::class.java)
+    // FlushMode=MANUAL 확인
+
+    val newTx = Transaction(/* businessNo = businessNo, ... */)
+    entityManager.persist(newTx)
+    // → 1차 캐시에 저장됨. 트랜잭션 커밋에 맡긴다.
+    return result  // run_business_no 포함
+}
+
+// 2단계: 커밋 완료 후 별도 트랜잭션에서 재조회
+@Transactional(readOnly = true)
+fun verifyNotFlushed(businessNo: String): Map<String, Any?> {
+    val found = transactionRepository.findAll()
+        .filter { it.businessNo == businessNo }
+    return mapOf(
+        "db_found_count" to found.size,
+        "actually_persisted" to found.isNotEmpty()
+    )
 }
 ```
+
+컨트롤러에서 1단계 → 2단계를 순서대로 호출하여, 커밋 후 DB 반영 여부를 증거 기반으로 결론짓는다.
 
 ### 실험 C: readOnly 성능 비교
 
@@ -109,25 +110,41 @@ fun experimentWritablePerformance(): Map<String, Any?> {
 }
 ```
 
-### 실험 D: readOnly에서 persist 시도
+### 실험 D: readOnly에서 명시적 flush 동작 확인
+
+FlushMode=MANUAL이어도 **명시적 `flush()` 호출**은 차단되는지, 그리고 flush로 전송된 INSERT가 커밋 후 실제로 DB에 남는지를 검증한다.
 
 ```kotlin
+// 1단계: readOnly 트랜잭션에서 persist + 명시적 flush()
 @Transactional(readOnly = true)
-fun experimentReadOnlyWithPersist(): Map<String, Any?> {
-    val newTransaction = Transaction(
-        approveDateTime = LocalDateTime.now(),
-        amount = BigDecimal("99999.99"),
-        // ...
-    )
-    
+fun experimentReadOnlyWithExplicitFlush(): Map<String, Any?> {
+    val runId = UUID.randomUUID().toString().substring(0, 8)
+    val businessNo = "READONLY-2D-$runId"  // 실행별 고유 식별자
+
+    val newTransaction = Transaction(/* businessNo = businessNo, ... */)
+
     try {
-        entityManager.persist(newTransaction)  // ✅ 성공!
-        entityManager.flush()  // ❓ 결과는?
+        entityManager.persist(newTransaction)   // ✅ 성공
+        entityManager.flush()                   // ❓ INSERT SQL이 DB로 전송되는가?
     } catch (e: Exception) {
-        // 어떤 예외가 발생하나?
+        // 예외 종류와 메시지를 기록
     }
+    return result  // run_business_no 포함
+}
+
+// 2단계: 커밋 완료 후 별도 트랜잭션에서 재조회
+@Transactional(readOnly = true)
+fun verifyExplicitFlushResult(businessNo: String): Map<String, Any?> {
+    val found = transactionRepository.findAll()
+        .filter { it.businessNo == businessNo }
+    return mapOf(
+        "db_found_count" to found.size,
+        "actually_persisted" to found.isNotEmpty()
+    )
 }
 ```
+
+실험 B와의 차이: B는 auto-flush(커밋 시 자동 flush)를 관찰하고, D는 명시적 `flush()` 호출의 효과를 관찰한다.
 
 ### 실험 E: readOnly 메모리 사용량 비교
 
@@ -170,13 +187,13 @@ fun experimentWritableMemory(): Map<String, Any?> {
 # 실험 A: 상태 확인
 curl http://localhost:8080/api/v1/experiments/readonly-status
 
-# 실험 B: 수정 시도
+# 실험 B: persist 후 커밋 결과 검증
 curl http://localhost:8080/api/v1/experiments/readonly-modify
 
 # 실험 C: 성능 비교
 curl http://localhost:8080/api/v1/experiments/readonly-performance
 
-# 실험 D: persist 시도
+# 실험 D: 명시적 flush 동작 확인
 curl http://localhost:8080/api/v1/experiments/readonly-persist
 
 # 실험 E: 메모리 비교

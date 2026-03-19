@@ -2,7 +2,7 @@
 
 ## 개요
 
-페이징 처리 시 매번 실행되는 COUNT 쿼리를 스킵하여 **46% 성능 향상**을 달성한 최적화 기법입니다.
+페이징 처리 시 매번 실행되는 COUNT 쿼리를 스킵하여 **46% 성능 향상**을 달성한 최적화 기법이다.
 
 ## 문제 상황
 
@@ -303,7 +303,7 @@ GET /api/v1/transactions?minAmount=10000&sortBy=amount&totalElements=400254
 
 ### 6. Deep Pagination 문제는 별도
 
-이 최적화는 COUNT 쿼리만 스킵하며, OFFSET 기반 페이징의 근본 문제는 해결하지 않습니다:
+이 최적화는 COUNT 쿼리만 스킵하며, OFFSET 기반 페이징의 근본 문제는 해결하지 않는다:
 
 ```sql
 -- OFFSET이 크면 데이터 쿼리 자체가 느려짐

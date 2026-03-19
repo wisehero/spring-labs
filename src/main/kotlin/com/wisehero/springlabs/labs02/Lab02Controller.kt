@@ -34,21 +34,36 @@ class Lab02Controller(
     }
 
     /**
-     * 실험 2-B: readOnly에서 수정 시도
+     * 실험 2-B: readOnly에서 persist 후 커밋 결과 검증
      * GET /api/v1/experiments/readonly-modify
      */
     @GetMapping("/readonly-modify")
     fun testReadOnlyModify(): ResponseEntity<ApiResponse<Map<String, Any?>>> {
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
-        log.info("║  실험 2-B: readOnly에서 수정 시도                            ║")
+        log.info("║  실험 2-B: readOnly에서 persist 후 커밋 결과 검증             ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
 
-        val testId = readOnlyExperimentService.setupTestTransaction()
-        val result = readOnlyExperimentService.experimentReadOnlyWithModification(testId)
+        val result = readOnlyExperimentService.experimentReadOnlyPersistAndVerify()
+        val businessNo = result["run_business_no"] as String
 
-        return ResponseEntity.ok(ApiResponse.success(result, "readOnly 수정 테스트"))
+        // readOnly 트랜잭션이 커밋된 후, 별도 트랜잭션에서 실제 DB 반영 여부를 재조회한다.
+        val verification = readOnlyExperimentService.verifyNotFlushed(businessNo)
+        val actuallyPersisted = verification["actually_persisted"] as Boolean
+        val dbFoundCount = verification["db_found_count"] as Int
+
+        val fullResult = result.toMutableMap()
+        fullResult["verification"] = verification
+        fullResult["conclusion"] = if (!actuallyPersisted) {
+            "readOnly=true → FlushMode=MANUAL → 커밋 후 재조회 결과 DB에 0건 → persist한 엔티티가 실제로 DB에 반영되지 않았다"
+        } else {
+            "예상과 다름! readOnly=true인데도 DB에 ${dbFoundCount}건 반영됨"
+        }
+
+        log.info("실험 2-B 검증 완료: actually_persisted=$actuallyPersisted, db_found_count=$dbFoundCount")
+
+        return ResponseEntity.ok(ApiResponse.success(fullResult, "실험 2-B 완료: ${fullResult["conclusion"]}"))
     }
 
     /**
@@ -83,22 +98,38 @@ class Lab02Controller(
     }
 
     /**
-     * 실험 2-D: readOnly에서 persist 시도
+     * 실험 2-D: readOnly에서 명시적 flush 동작 확인
      * GET /api/v1/experiments/readonly-persist
      */
     @GetMapping("/readonly-persist")
     fun testReadOnlyPersist(): ResponseEntity<ApiResponse<Map<String, Any?>>> {
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
-        log.info("║  실험 2-D: readOnly에서 persist 시도                        ║")
+        log.info("║  실험 2-D: readOnly에서 명시적 flush 동작 확인                ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
 
-        val result = readOnlyExperimentService.experimentReadOnlyWithPersist()
+        val result = readOnlyExperimentService.experimentReadOnlyWithExplicitFlush()
+        val businessNo = result["run_business_no"] as String
+
+        // readOnly 트랜잭션 커밋 후, 명시적 flush된 데이터가 실제로 DB에 남아있는지 재조회
+        val verification = readOnlyExperimentService.verifyExplicitFlushResult(businessNo)
+        val actuallyPersisted = verification["actually_persisted"] as Boolean
+        val dbFoundCount = verification["db_found_count"] as Int
+
+        val fullResult = result.toMutableMap()
+        fullResult["verification"] = verification
+        fullResult["conclusion"] = if (actuallyPersisted) {
+            "readOnly=true에서 명시적 flush() 호출 시 INSERT SQL이 실행되고, 커밋 후에도 DB에 ${dbFoundCount}건 남아있다"
+        } else {
+            "readOnly=true에서 명시적 flush() 호출 시 INSERT SQL은 실행되지만, 커밋 후 DB에 반영되지 않았다 (0건)"
+        }
+
+        log.info("실험 2-D 검증 완료: actually_persisted=$actuallyPersisted, db_found_count=$dbFoundCount")
 
         return ResponseEntity.ok(ApiResponse.success(
-            result,
-            "readOnly에서 persist 테스트"
+            fullResult,
+            "실험 2-D 완료: ${fullResult["conclusion"]}"
         ))
     }
 

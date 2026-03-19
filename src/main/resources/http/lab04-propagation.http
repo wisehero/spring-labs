@@ -43,7 +43,7 @@ GET http://localhost:8080/api/v1/experiments/propagation/4-8/connection-separati
 ### ---
 
 ### 실험 4-9: 커넥션 풀 고갈 시뮬레이션
-### WARNING: 이 요청은 약 30초 소요됩니다! HikariCP 풀 고갈 대기 시간.
+### WARNING: HikariCP connectionTimeout 설정값만큼 소요됩니다.
 POST http://localhost:8080/api/v1/experiments/propagation/4-9/connection-pool-exhaustion
 
 ### ---

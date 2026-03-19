@@ -2,13 +2,9 @@
 
 ## 개요
 
-Spring의 `@Transactional`이 같은 클래스 내부에서 호출될 때 무시되는 문제를 실험합니다.
+Spring의 `@Transactional`이 같은 클래스 내부에서 호출될 때 무시되는 문제를 실험한다.
 
-### 왜 중요한가?
-
-- `@Transactional`은 Spring에서 가장 많이 사용하는 어노테이션 중 하나이며, 프록시 기반 AOP의 동작 원리를 이해하지 못하면 **트랜잭션이 적용되지 않는 버그**가 발생한다.
-- 자기 호출(self-invocation) 문제는 코드 리뷰에서도 놓치기 쉽고, 런타임에 예외 없이 조용히 실패하여 디버깅이 어렵다.
-- `REQUIRES_NEW`, `readOnly`, `timeout` 등 모든 `@Transactional` 속성이 동일하게 무시된다.
+프록시 기반 AOP의 동작 원리를 이해하지 못하면 **트랜잭션이 적용되지 않는 버그**가 발생한다. 자기 호출(self-invocation) 문제는 코드 리뷰에서도 놓치기 쉽고, 런타임에 예외 없이 조용히 실패하여 디버깅이 어렵다. `REQUIRES_NEW`, `readOnly`, `timeout` 등 모든 `@Transactional` 속성이 동일하게 무시된다.
 
 ## 핵심 개념
 
@@ -21,7 +17,7 @@ Spring의 `@Transactional`이 같은 클래스 내부에서 호출될 때 무시
               (@Transactional 처리)
 ```
 
-Spring AOP는 **프록시 패턴**을 사용합니다:
+Spring AOP는 **프록시 패턴**으로 동작한다:
 1. 외부에서 Bean을 호출하면 → **프록시**가 가로챔 → `@Transactional` 동작
 2. 같은 클래스 내부에서 호출하면 → `this.method()` → **프록시 우회** → `@Transactional` 무시!
 

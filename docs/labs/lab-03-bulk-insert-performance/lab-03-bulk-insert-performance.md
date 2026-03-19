@@ -2,7 +2,7 @@
 
 ## 개요
 
-대량 데이터 Insert 시 JPA saveAll, JdbcTemplate batchUpdate, Native Bulk Insert의 성능을 비교합니다.
+대량 데이터 Insert 시 JPA saveAll, JdbcTemplate batchUpdate, Native Bulk Insert의 성능을 비교한다.
 
 ## 비교 대상
 
