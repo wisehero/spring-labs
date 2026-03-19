@@ -38,16 +38,14 @@ fun insertWithSaveAll(count: Int) {
 
 **내부 동작:**
 ```
-saveAll() 호출
-├── 엔티티 1: persist() → 1차 캐시 저장 → 스냅샷 생성
-├── 엔티티 2: persist() → 1차 캐시 저장 → 스냅샷 생성
+saveAll() 호출 (IDENTITY 전략)
+├── 엔티티 1: persist() → INSERT 즉시 실행 (ID 획득 필요) → 1차 캐시 저장
+├── 엔티티 2: persist() → INSERT 즉시 실행 → 1차 캐시 저장
 ├── ...
-└── 엔티티 N: persist() → 1차 캐시 저장 → 스냅샷 생성
-    
-flush() 호출
-├── 더티체킹 (스냅샷 비교)
-├── INSERT 쿼리 생성 (batch_size만큼 묶음)
-└── DB로 전송
+└── 엔티티 N: persist() → INSERT 즉시 실행 → 1차 캐시 저장
+
+※ IDENTITY 전략은 DB가 ID를 생성하므로, Hibernate가 persist 시점에
+   INSERT를 바로 실행해야 한다. batch_size 설정이 있어도 배치 묶기가 불가능하다.
 ```
 
 **장점:**

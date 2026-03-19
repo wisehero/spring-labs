@@ -58,8 +58,12 @@ class NplusOneExperimentService(
         getSessionFactory().statistics.clear()
     }
 
+    /**
+     * queryExecutionCount는 JPQL/HQL/Criteria만 추적하고 EntityManager.find()는 포함하지 않으므로,
+     * em.find() 포함 모든 SQL을 추적하는 prepareStatementCount를 사용한다.
+     */
     private fun getQueryCount(): Long =
-        getSessionFactory().statistics.queryExecutionCount
+        getSessionFactory().statistics.prepareStatementCount
 
     // ==========================================
     // 테스트 데이터 생성

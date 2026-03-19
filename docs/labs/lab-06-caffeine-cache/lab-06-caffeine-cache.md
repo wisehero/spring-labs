@@ -316,8 +316,8 @@ TTL 만료 시점의 동시 요청 시나리오:
 ```
 
 **Negative Caching 문제**:
-- `unless` 없이 null을 캐시하면, 존재하지 않는 ID 조회가 영구적으로 캐시됨
-- 나중에 해당 ID의 데이터가 생성되어도 캐시된 null이 반환됨
+- `unless` 없이 null을 캐시하면, 존재하지 않는 ID 조회가 TTL 만료 전까지 stale null로 남음
+- 그 사이에 해당 ID의 데이터가 생성되어도 캐시된 null이 반환됨
 - `unless = "#result == null"`로 이 문제를 방지
 
 - **예상 결과**: 존재하는 ID → SQL 1회 (이후 hit), 존재하지 않는 ID → SQL 5회 (매번 miss)

@@ -41,9 +41,5 @@ class TransactionService(
                 throw BusinessException(ErrorCode.INVALID_AMOUNT_RANGE)
             }
         }
-
-        if (request.size !in 1..100) {
-            throw BusinessException(ErrorCode.INVALID_PAGE_SIZE)
-        }
     }
 }

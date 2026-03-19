@@ -10,8 +10,6 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
-import java.math.BigDecimal
-import java.time.LocalDateTime
 
 @Repository
 class TransactionRepositoryImpl(
@@ -48,85 +46,28 @@ class TransactionRepositoryImpl(
     }
 
     private fun buildWhereConditions(request: TransactionSearchRequest): List<BooleanExpression> {
-        val conditions = mutableListOf<BooleanExpression>()
-
-        request.startDateTime?.let {
-            conditions.add(approveDateTimeGoe(it))
-        }
-
-        request.endDateTime?.let {
-            conditions.add(approveDateTimeLoe(it))
-        }
-
-        request.transactionState?.let {
-            conditions.add(transactionStateEq(it))
-        }
-
-        request.businessNo?.let {
-            conditions.add(businessNoLike(it))
-        }
-
-        request.minAmount?.let {
-            conditions.add(amountGoe(it))
-        }
-
-        request.maxAmount?.let {
-            conditions.add(amountLoe(it))
-        }
-
-        request.posTransactionNo?.let {
-            conditions.add(posTransactionNoLike(it))
-        }
-
-        request.cashReceiptIssueYn?.let {
-            conditions.add(cashReceiptIssueYnEq(it))
-        }
-
-        return conditions
-    }
-
-    private fun approveDateTimeGoe(startDateTime: LocalDateTime): BooleanExpression {
-        return transaction.approveDateTime.goe(startDateTime)
-    }
-
-    private fun approveDateTimeLoe(endDateTime: LocalDateTime): BooleanExpression {
-        return transaction.approveDateTime.loe(endDateTime)
-    }
-
-    private fun transactionStateEq(state: String): BooleanExpression {
-        return transaction.transactionState.eq(state)
-    }
-
-    private fun businessNoLike(businessNo: String): BooleanExpression {
-        return transaction.businessNo.contains(businessNo)
-    }
-
-    private fun amountGoe(minAmount: BigDecimal): BooleanExpression {
-        return transaction.amount.goe(minAmount)
-    }
-
-    private fun amountLoe(maxAmount: BigDecimal): BooleanExpression {
-        return transaction.amount.loe(maxAmount)
-    }
-
-    private fun posTransactionNoLike(posTransactionNo: String): BooleanExpression {
-        return transaction.posTransactionNo.contains(posTransactionNo)
-    }
-
-    private fun cashReceiptIssueYnEq(cashReceiptIssueYn: Boolean): BooleanExpression {
-        return transaction.cashReceiptIssueYn.eq(cashReceiptIssueYn)
+        return listOfNotNull(
+            request.startDateTime?.let { transaction.approveDateTime.goe(it) },
+            request.endDateTime?.let { transaction.approveDateTime.loe(it) },
+            request.transactionState?.let { transaction.transactionState.eq(it) },
+            request.businessNo?.let { transaction.businessNo.contains(it) },
+            request.minAmount?.let { transaction.amount.goe(it) },
+            request.maxAmount?.let { transaction.amount.loe(it) },
+            request.posTransactionNo?.let { transaction.posTransactionNo.contains(it) },
+            request.cashReceiptIssueYn?.let { transaction.cashReceiptIssueYn.eq(it) }
+        )
     }
 
     private fun buildOrderSpecifier(sortBy: String, sortDirection: String): OrderSpecifier<*> {
-        val isAsc = sortDirection.equals("asc", ignoreCase = true)
-
-        return when (sortBy) {
-            "approveDateTime" -> if (isAsc) transaction.approveDateTime.asc() else transaction.approveDateTime.desc()
-            "amount" -> if (isAsc) transaction.amount.asc() else transaction.amount.desc()
-            "businessNo" -> if (isAsc) transaction.businessNo.asc() else transaction.businessNo.desc()
-            "transactionState" -> if (isAsc) transaction.transactionState.asc() else transaction.transactionState.desc()
-            "id" -> if (isAsc) transaction.id.asc() else transaction.id.desc()
-            else -> transaction.approveDateTime.desc()
+        val path = when (sortBy) {
+            "approveDateTime" -> transaction.approveDateTime
+            "amount" -> transaction.amount
+            "businessNo" -> transaction.businessNo
+            "transactionState" -> transaction.transactionState
+            "id" -> transaction.id
+            else -> transaction.approveDateTime
         }
+
+        return if (sortDirection.equals("asc", ignoreCase = true)) path.asc() else path.desc()
     }
 }

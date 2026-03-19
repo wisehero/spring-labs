@@ -61,8 +61,9 @@ data class TransactionSearchRequest(
 ) {
     /**
      * 카운트 쿼리 필요 여부 판단
-     * - totalElements가 null이면 첫 페이지 → 카운트 필요
-     * - totalElements가 있으면 이후 페이지 → 카운트 불필요
+     * - totalElements가 null이면 → 카운트 실행
+     * - totalElements가 있으면 → 카운트 스킵 (클라이언트가 전달한 값 사용)
+     * 페이지 번호와 무관하게 totalElements 존재 여부로만 결정한다.
      */
     fun needsCountQuery(): Boolean = totalElements == null
 }

@@ -77,7 +77,7 @@ body {
   border: 1px solid rgba(0,212,255,0.25);
   border-radius: 999px;
   padding: 5px 14px;
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   color: var(--cyan);
   letter-spacing: 0.08em;
@@ -212,7 +212,7 @@ body {
 .metric-value.green  { color: var(--green); }
 
 .metric-sub {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 12px;
   color: var(--dim);
 }
@@ -234,7 +234,7 @@ body {
 .concept-card.amber { border-top: 3px solid var(--amber); }
 
 .concept-card h3 {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 13px;
   font-weight: 700;
   margin-bottom: 16px;
@@ -265,7 +265,7 @@ body {
 
 .concept-badge {
   display: inline-block;
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 4px;
@@ -283,26 +283,49 @@ body {
 }
 
 .sim-controls {
-  padding: 24px 28px;
+  padding: 20px 28px;
   border-bottom: 1px solid var(--border);
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
-  flex-wrap: wrap;
+}
+
+.sim-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .sim-title {
-  font-family: 'D2Coding', monospace;
-  font-size: 12px;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 11px;
   color: var(--dim);
-  letter-spacing: 0.1em;
-  margin-right: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sim-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .sim-btn-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 380px) {
+  .sim-btn-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sim-btn {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 12px;
-  padding: 8px 18px;
+  padding: 9px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface2);
@@ -310,6 +333,8 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  text-align: center;
+  width: 100%;
 }
 .sim-btn:hover { border-color: var(--dim); color: var(--text-bright); }
 .sim-btn.active-red   { border-color: var(--red);   color: var(--red);   background: var(--red-dim); }
@@ -318,16 +343,16 @@ body {
 .sim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .reset-btn {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--dim);
   cursor: pointer;
-  margin-left: auto;
   transition: all 0.2s;
+  letter-spacing: 0.04em;
 }
 .reset-btn:hover { color: var(--text-bright); border-color: var(--dim); }
 
@@ -347,7 +372,7 @@ body {
   gap: 10px;
 }
 .thread-header {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 13px;
   font-weight: 700;
   padding: 10px 16px;
@@ -397,7 +422,7 @@ body {
   gap: 10px;
 }
 .product-label {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 10px;
   color: var(--dim);
   letter-spacing: 0.1em;
@@ -478,7 +503,7 @@ body {
   padding: 20px 28px;
 }
 .console-header {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   color: var(--dim);
   letter-spacing: 0.1em;
@@ -533,7 +558,7 @@ body {
 .exp-card.amber { border-left: 3px solid var(--amber); }
 
 .exp-num {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   color: var(--dim);
   letter-spacing: 0.08em;
@@ -554,7 +579,7 @@ body {
 }
 .exp-tag {
   display: inline-block;
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 10px;
   padding: 3px 8px;
   border-radius: 4px;
@@ -567,7 +592,7 @@ body {
 .exp-tag.purple { background: var(--purple-dim); color: var(--purple); }
 
 .exp-endpoint {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -602,7 +627,7 @@ body {
   padding: 20px;
 }
 .dl-thread h4 {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 12px;
   font-weight: 700;
   margin-bottom: 14px;
@@ -631,7 +656,7 @@ body {
 }
 .dl-icon  { font-size: 2rem; line-height: 1; }
 .dl-label {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 10px;
   color: var(--red);
   text-align: center;
@@ -686,7 +711,7 @@ body {
   margin-bottom: 32px;
 }
 .strategy-table th {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--dim);
@@ -711,7 +736,7 @@ body {
 
 .badge {
   display: inline-block;
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 10px;
   padding: 2px 7px;
   border-radius: 4px;
@@ -798,7 +823,7 @@ body {
   margin: 28px auto;
 }
 .closer-meta {
-  font-family: 'D2Coding', monospace;
+  font-family: 'Noto Sans KR', sans-serif;
   font-size: 11px;
   color: var(--dim);
   margin-top: 24px;
@@ -929,62 +954,9 @@ body {
     </div>
   </div>
 
-  <!-- SECTION 02: SIMULATOR -->
+  <!-- SECTION 02: EXPERIMENTS -->
   <div class="section">
-    <div class="sec-label">02 · 시뮬레이터</div>
-    <h2 class="section-title">동시성 제어 시뮬레이터</h2>
-
-    <div class="simulator-wrapper">
-      <div class="sim-controls">
-        <span class="sim-title">SCENARIO:</span>
-        <button class="sim-btn" id="btn-none" onclick="runScenario('none')">락 없음 (Lost Update)</button>
-        <button class="sim-btn" id="btn-opt" onclick="runScenario('optimistic')">Optimistic Lock (@Version)</button>
-        <button class="sim-btn" id="btn-pes" onclick="runScenario('pessimistic')">Pessimistic Lock (FOR UPDATE)</button>
-        <button class="reset-btn" onclick="resetSim()">↺ RESET</button>
-      </div>
-
-      <div class="sim-stage">
-        <!-- Thread A -->
-        <div class="thread-col" id="col-a">
-          <div class="thread-header" id="hdr-a">Thread-A</div>
-          <div id="events-a"></div>
-        </div>
-
-        <!-- Product Box -->
-        <div class="product-col">
-          <span class="product-label">DB · Products</span>
-          <div class="product-box" id="product-box">
-            <div class="product-name">한정판 스니커즈</div>
-            <div class="product-stock" id="product-stock">10</div>
-            <div class="product-version" id="product-version">version = 0</div>
-          </div>
-          <div class="product-status idle" id="product-status">IDLE</div>
-        </div>
-
-        <!-- Thread B -->
-        <div class="thread-col" id="col-b">
-          <div class="thread-header" id="hdr-b">Thread-B</div>
-          <div id="events-b"></div>
-        </div>
-      </div>
-
-      <!-- Result Banner -->
-      <div class="sim-result" id="sim-result">
-        <span id="result-icon">⚠</span>
-        <span id="result-text"></span>
-      </div>
-
-      <!-- Console -->
-      <div class="sim-console">
-        <div class="console-header">TERMINAL — SQL LOG</div>
-        <div class="console-lines" id="console-lines"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 03: EXPERIMENTS -->
-  <div class="section">
-    <div class="sec-label">03 · 실험 목록</div>
+    <div class="sec-label">02 · 실험 목록</div>
     <h2 class="section-title">실험 목록</h2>
 
     <div class="exp-grid">
@@ -1056,6 +1028,66 @@ body {
     </div>
   </div>
 
+  <!-- SECTION 03: SIMULATOR -->
+  <div class="section">
+    <div class="sec-label">03 · 시뮬레이터</div>
+    <h2 class="section-title">동시성 제어 시뮬레이터</h2>
+
+    <div class="simulator-wrapper">
+      <div class="sim-controls">
+        <div class="sim-controls-header">
+          <span class="sim-title">SCENARIO</span>
+          <button class="reset-btn" onclick="resetSim()">↺ RESET</button>
+        </div>
+        <div class="sim-btn-grid">
+          <button class="sim-btn" id="btn-none" onclick="runScenario('none')">락 없음 (Lost Update)</button>
+          <button class="sim-btn" id="btn-retry" onclick="runScenario('retry')">Optimistic + Retry</button>
+          <button class="sim-btn" id="btn-perf" onclick="runScenario('performance')">성능 비교 (10t vs 100t)</button>
+          <button class="sim-btn" id="btn-opt" onclick="runScenario('optimistic')">Optimistic Lock (@Version)</button>
+          <button class="sim-btn" id="btn-pes" onclick="runScenario('pessimistic')">Pessimistic Lock (FOR UPDATE)</button>
+          <button class="sim-btn" id="btn-dead" onclick="runScenario('deadlock')">데드락 (순환 대기)</button>
+        </div>
+      </div>
+
+      <div class="sim-stage">
+        <!-- Thread A -->
+        <div class="thread-col" id="col-a">
+          <div class="thread-header" id="hdr-a">Thread-A</div>
+          <div id="events-a"></div>
+        </div>
+
+        <!-- Product Box -->
+        <div class="product-col">
+          <span class="product-label">DB · Products</span>
+          <div class="product-box" id="product-box">
+            <div class="product-name">한정판 스니커즈</div>
+            <div class="product-stock" id="product-stock">10</div>
+            <div class="product-version" id="product-version">version = 0</div>
+          </div>
+          <div class="product-status idle" id="product-status">IDLE</div>
+        </div>
+
+        <!-- Thread B -->
+        <div class="thread-col" id="col-b">
+          <div class="thread-header" id="hdr-b">Thread-B</div>
+          <div id="events-b"></div>
+        </div>
+      </div>
+
+      <!-- Result Banner -->
+      <div class="sim-result" id="sim-result">
+        <span id="result-icon">⚠</span>
+        <span id="result-text"></span>
+      </div>
+
+      <!-- Console -->
+      <div class="sim-console">
+        <div class="console-header">TERMINAL — SQL LOG</div>
+        <div class="console-lines" id="console-lines"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- SECTION 04: DEADLOCK DEEP DIVE -->
   <div class="section">
     <div class="sec-label">04 · 데드락 분석</div>
@@ -1076,7 +1108,7 @@ body {
         <div class="dl-center">
           <div class="dl-icon">🔄</div>
           <div class="dl-label">순환<br>대기<br>DEADLOCK</div>
-          <div style="font-family:'D2Coding',monospace; font-size:20px; color: var(--red); margin-top: 8px;">↕</div>
+          <div style="font-family:'Noto Sans KR',sans-serif; font-size:20px; color: var(--red); margin-top: 8px;">↕</div>
         </div>
 
         <div class="dl-thread">
@@ -1229,6 +1261,7 @@ function resetSim() {
     simRunning = false;
 
     // Product box
+    document.querySelector('.product-name').textContent = '한정판 스니커즈';
     document.getElementById('product-stock').textContent = '10';
     document.getElementById('product-stock').className = 'product-stock';
     document.getElementById('product-version').textContent = 'version = 0';
@@ -1254,7 +1287,7 @@ function resetSim() {
     r.textContent = '';
 
     // Buttons
-    ['btn-none','btn-opt','btn-pes'].forEach(id => {
+    ['btn-none','btn-opt','btn-pes','btn-retry','btn-perf','btn-dead'].forEach(id => {
       const b = document.getElementById(id);
       b.disabled = false;
       b.className = 'sim-btn';
@@ -1321,7 +1354,7 @@ function showResult(text, cls) {
 }
 
 function setActiveBtn(id, cls) {
-  ['btn-none','btn-opt','btn-pes'].forEach(b => {
+  ['btn-none','btn-opt','btn-pes','btn-retry','btn-perf','btn-dead'].forEach(b => {
     document.getElementById(b).disabled = true;
     document.getElementById(b).className = 'sim-btn';
   });
@@ -1337,6 +1370,9 @@ async function runScenario(type) {
   if (type === 'none') await scenarioNone();
   else if (type === 'optimistic') await scenarioOptimistic();
   else if (type === 'pessimistic') await scenarioPessimistic();
+  else if (type === 'retry') await scenarioRetry();
+  else if (type === 'performance') await scenarioPerformance();
+  else if (type === 'deadlock') await scenarioDeadlock();
 
   simRunning = false;
 }
@@ -1500,6 +1536,225 @@ async function scenarioPessimistic() {
   showResult(
     '✓ CORRECT — stock=8. 두 번의 차감이 순서대로 정확히 반영됨. SELECT FOR UPDATE가 직렬화를 보장.',
     'success'
+  );
+}
+
+// ── SCENARIO 4: OPTIMISTIC + RETRY ──────────────────────────────────────────
+async function scenarioRetry() {
+  setActiveBtn('btn-retry', 'active-cyan');
+
+  log('<span class="cl-ts">[00:00]</span> <span class="cl-info">시나리오: Optimistic Lock + Exponential Backoff Retry</span>');
+  await sleep(600);
+
+  // Both read
+  setHdr('a', 'active-a');
+  setHdr('b', 'active-b');
+  addEvent('a', 'READ: stock=10, ver=0', 'read');
+  addEvent('b', 'READ: stock=10, ver=0', 'read');
+  setStatus('READ × 2', 'locked');
+
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">SELECT stock, version FROM product WHERE id=1</span>');
+  await sleep(300);
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT stock, version FROM product WHERE id=1</span>');
+  await sleep(800);
+
+  // Thread-A succeeds
+  addEvent('a', 'UPDATE ver=0→1 ✓', 'write');
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">UPDATE product SET stock=9, version=1 WHERE id=1 AND version=0</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ 1 row affected. COMMIT ✓</span>');
+  setStock('9', 'changed');
+  setVersion('1');
+  setHdr('a', 'success');
+  await sleep(600);
+
+  // Thread-B fails — retry 1
+  addEvent('b', 'UPDATE ver=0 → ✗ CONFLICT', 'error');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">UPDATE product SET stock=9, version=1 WHERE id=1 AND version=0</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-err">→ 0 rows! OptimisticLockException → ROLLBACK</span>');
+  setHdr('b', 'error');
+  await sleep(500);
+
+  // Retry with backoff
+  addEvent('b', '↺ Retry #1 (backoff 3ms)', 'retry');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-info">→ Retry #1: 지수 백오프 ~3ms 대기 후 새 트랜잭션 시작</span>');
+  await sleep(700);
+
+  // Thread-B re-reads and succeeds
+  setHdr('b', 'active-b');
+  addEvent('b', 'RE-READ: stock=9, ver=1', 'read');
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT stock, version FROM product WHERE id=1</span>');
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-info">→ stock=9, version=1 (최신값 조회)</span>');
+  await sleep(600);
+
+  addEvent('b', 'UPDATE ver=1→2 ✓', 'write');
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">UPDATE product SET stock=8, version=2 WHERE id=1 AND version=1</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-ok">→ 1 row affected. COMMIT ✓</span>');
+
+  setStock('8', 'ok');
+  setVersion('2');
+  setProductBox('correct');
+  setStatus('RETRY SUCCESS ✓', 'ok');
+  setHdr('b', 'success');
+
+  log('<span class="cl-ts">[00:06]</span> <span class="cl-ok">✓ 최종 stock=8, version=2 — Retry 1회로 정합성 보장. 경합 심하면 재시도 횟수 증가.</span>');
+
+  showResult(
+    '✓ Retry 성공 — Thread-B가 1회 재시도 후 stock=8 달성. 지수 백오프로 충돌 분산.',
+    'correct'
+  );
+}
+
+// ── SCENARIO 5: PERFORMANCE COMPARISON ──────────────────────────────────────
+async function scenarioPerformance() {
+  setActiveBtn('btn-perf', 'active-cyan');
+
+  // Change display for performance mode
+  document.getElementById('product-name') && (document.querySelector('.product-name').textContent = '성능 비교');
+
+  log('<span class="cl-ts">[00:00]</span> <span class="cl-info">시나리오: 경합 수준별 성능 비교 (Optimistic vs Pessimistic)</span>');
+  await sleep(600);
+
+  // Low contention
+  setStatus('LOW CONTENTION', 'locked');
+  addEvent('a', '── 10 스레드 (낮은 경합) ──', 'read');
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-info">═══ 낮은 경합: 10 스레드 ═══</span>');
+  await sleep(500);
+
+  setHdr('a', 'active-a');
+  addEvent('a', 'Optimistic + Retry', 'write');
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Optimistic]</span> <span class="cl-info">10 스레드 × 재시도... 충돌 적음</span>');
+  await sleep(800);
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Optimistic]</span> <span class="cl-ok">→ 완료: ~120ms (재시도 ~5회 발생)</span>');
+  await sleep(500);
+
+  setHdr('b', 'active-b');
+  addEvent('b', 'Pessimistic (FOR UPDATE)', 'write');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Pessimistic]</span> <span class="cl-info">10 스레드 × 순차 잠금... 직렬화 대기</span>');
+  await sleep(800);
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-b">[Pessimistic]</span> <span class="cl-ok">→ 완료: ~180ms (Lock 대기 누적)</span>');
+  await sleep(500);
+
+  addEvent('a', '🏆 Optimistic 승', 'read');
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-ok">낮은 경합 → Optimistic 유리 (재시도가 잠금 대기보다 빠름)</span>');
+  setHdr('a', 'success');
+  await sleep(800);
+
+  // High contention
+  setHdr('a', '');
+  setHdr('b', '');
+  setStatus('HIGH CONTENTION', 'conflict');
+  addEvent('b', '── 100 스레드 (높은 경합) ──', 'read');
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-info">═══ 높은 경합: 100 스레드 ═══</span>');
+  await sleep(500);
+
+  setHdr('a', 'active-a');
+  addEvent('a', 'Optimistic + Retry', 'error');
+  log('<span class="cl-ts">[00:06]</span> <span class="cl-a">[Optimistic]</span> <span class="cl-info">100 스레드 × 재시도... 충돌 빈발!</span>');
+  await sleep(800);
+  log('<span class="cl-ts">[00:06]</span> <span class="cl-a">[Optimistic]</span> <span class="cl-err">→ 완료: ~2800ms (재시도 수백 회 폭주)</span>');
+  await sleep(500);
+
+  setHdr('b', 'active-b');
+  addEvent('b', 'Pessimistic (FOR UPDATE)', 'write');
+  log('<span class="cl-ts">[00:07]</span> <span class="cl-b">[Pessimistic]</span> <span class="cl-info">100 스레드 × 순차 잠금... 안정적 처리</span>');
+  await sleep(800);
+  log('<span class="cl-ts">[00:07]</span> <span class="cl-b">[Pessimistic]</span> <span class="cl-ok">→ 완료: ~1200ms (잠금 대기만, 재시도 없음)</span>');
+  await sleep(500);
+
+  addEvent('b', '🏆 Pessimistic 승', 'read');
+  log('<span class="cl-ts">[00:08]</span> <span class="cl-ok">높은 경합 → Pessimistic 유리 (재시도 폭주 없이 안정적 처리)</span>');
+  setHdr('b', 'success');
+
+  setStock('0', 'ok');
+  setProductBox('correct');
+  setStatus('COMPLETE ✓', 'ok');
+
+  showResult(
+    '낮은 경합(10t) → Optimistic 유리 · 높은 경합(100t) → Pessimistic 유리. 경합 빈도에 따라 최적 전략이 다르다.',
+    'correct'
+  );
+}
+
+// ── SCENARIO 6: DEADLOCK ────────────────────────────────────────────────────
+async function scenarioDeadlock() {
+  setActiveBtn('btn-dead', 'active-red');
+
+  // Relabel product box for deadlock
+  document.querySelector('.product-name').textContent = 'Product-A & B';
+  setStock('A:5 B:3', '');
+
+  log('<span class="cl-ts">[00:00]</span> <span class="cl-info">시나리오: 데드락 (역순 잠금으로 순환 대기)</span>');
+  await sleep(600);
+
+  // Thread-A locks Product-A
+  setHdr('a', 'active-a');
+  addEvent('a', 'LOCK Product-A ✓', 'write');
+  setStatus('A locks A', 'locked');
+
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">SELECT * FROM product WHERE id=A FOR UPDATE</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ Product-A Row Lock 획득</span>');
+  await sleep(400);
+
+  // Thread-B locks Product-B
+  setHdr('b', 'active-b');
+  addEvent('b', 'LOCK Product-B ✓', 'write');
+
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT * FROM product WHERE id=B FOR UPDATE</span>');
+  await sleep(400);
+  log('<span class="cl-ts">[00:01]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-ok">→ Product-B Row Lock 획득</span>');
+  await sleep(700);
+
+  // Thread-A tries to lock Product-B — BLOCKED
+  addEvent('a', 'LOCK Product-B → WAITING...', 'wait');
+  setStatus('CROSS WAIT', 'conflict');
+
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-sql">SELECT * FROM product WHERE id=B FOR UPDATE</span>');
+  await sleep(300);
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-err">→ BLOCKED! Thread-B가 Product-B Lock 보유 중</span>');
+  setHdr('a', 'waiting');
+  await sleep(600);
+
+  // Thread-B tries to lock Product-A — BLOCKED → DEADLOCK!
+  addEvent('b', 'LOCK Product-A → WAITING...', 'wait');
+
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-sql">SELECT * FROM product WHERE id=A FOR UPDATE</span>');
+  await sleep(300);
+  log('<span class="cl-ts">[00:02]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-err">→ BLOCKED! Thread-A가 Product-A Lock 보유 중</span>');
+  setHdr('b', 'waiting');
+  await sleep(800);
+
+  // InnoDB detects deadlock
+  setProductBox('conflict');
+  setStatus('DEADLOCK!', 'bad');
+
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-err">🔄 InnoDB: wait-for graph에서 Cycle 감지 → DEADLOCK 판정!</span>');
+  await sleep(600);
+
+  // Victim selection
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-err">→ Victim 선택: undo log가 작은 트랜잭션 강제 ROLLBACK</span>');
+  log('<span class="cl-ts">[00:03]</span> <span class="cl-info">   (undo log 크기 동일 시 TRX_ID가 큰 = 더 늦게 시작된 트랜잭션이 victim)</span>');
+  addEvent('b', '💀 VICTIM → ROLLBACK', 'error');
+  setHdr('b', 'error');
+  await sleep(600);
+
+  // Thread-A survives
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ Lock 획득 성공! Product-B 처리 계속</span>');
+  addEvent('a', 'Product-B Lock 획득 → 계속', 'write');
+  setHdr('a', 'success');
+  await sleep(500);
+
+  log('<span class="cl-ts">[00:04]</span> <span class="cl-a">[Thread-A]</span> <span class="cl-ok">→ COMMIT ✓</span>');
+  log('<span class="cl-ts">[00:05]</span> <span class="cl-b">[Thread-B]</span> <span class="cl-err">DeadlockLoserDataAccessException 수신</span>');
+
+  setStatus('DEADLOCK RESOLVED', 'conflict');
+
+  showResult(
+    '🔄 DEADLOCK — InnoDB가 순환 대기 감지 → undo log 작은 쪽(동일 시 TRX_ID 큰 쪽) victim ROLLBACK. 해결: 잠금 순서를 항상 동일하게 (ID 오름차순).',
+    'lost'
   );
 }
 </script>
