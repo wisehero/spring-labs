@@ -969,9 +969,158 @@ SELECT * FROM member WHERE team_id = 5</div>
     </div>
   </section>
 
+  <!-- SECTION 03: SOLUTION COMPARISON TABLE -->
+  <section>
+    <div class="sec-label green">Section 02</div>
+    <h2 class="section-title">해결 방법 비교</h2>
+    <p class="section-desc">각 방법의 SQL 수, JOIN 타입, 특징을 한눈에 비교한다.</p>
+
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>방법</th>
+          <th>SQL 수</th>
+          <th>JOIN 타입</th>
+          <th>특징</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:var(--text-bright)">LAZY (기본)</strong></td>
+          <td><span class="badge red">1 + N</span></td>
+          <td><span style="color:var(--dim)">—</span></td>
+          <td style="color:var(--red)">N+1 발생, 컬렉션 접근 시 추가 SELECT</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">JOIN FETCH</strong></td>
+          <td><span class="badge green">1</span></td>
+          <td><span class="badge cyan">INNER JOIN</span></td>
+          <td style="color:var(--text)">DISTINCT 필요, members 없는 팀 제외됨</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">@EntityGraph</strong></td>
+          <td><span class="badge green">1</span></td>
+          <td><span class="badge green">LEFT OUTER JOIN</span></td>
+          <td style="color:var(--text)">어노테이션만으로 설정, members 없는 팀도 포함</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">DTO Projection</strong></td>
+          <td><span class="badge green">1</span></td>
+          <td><span class="badge cyan">JOIN</span></td>
+          <td style="color:var(--text)">엔티티 미사용, PersistenceContext 오버헤드 없음</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">@BatchSize</strong></td>
+          <td><span class="badge amber">1 + ⌈N/size⌉</span></td>
+          <td><span style="color:var(--dim)">—</span></td>
+          <td style="color:var(--text)">IN절 배치, 완전한 해결책은 아님</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 04: 6 EXPERIMENT CARDS -->
+  <section>
+    <div class="sec-label purple">Section 03</div>
+    <h2 class="section-title">6가지 실험</h2>
+    <p class="section-desc">각 실험은 N+1의 발생 패턴 또는 해결 방법 하나를 집중적으로 검증한다.</p>
+
+    <div class="exp-grid">
+      <!-- 7-1 -->
+      <div class="exp-card red">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-1</div>
+            <div class="exp-card-title">@OneToMany N+1 발생</div>
+          </div>
+          <span class="badge red">N+1</span>
+        </div>
+        <div class="exp-card-body">
+          <p>Team → Members 컬렉션에 LazyProxy가 적용된 상태에서 findAll() 후 각 팀의 members에 접근한다.</p>
+          <div class="exp-result">⚡ 결과: 1 + 5 = 6 SQL 실행</div>
+        </div>
+      </div>
+
+      <!-- 7-2 -->
+      <div class="exp-card green">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-2</div>
+            <div class="exp-card-title">JOIN FETCH 해결</div>
+          </div>
+          <span class="badge green">INNER JOIN</span>
+        </div>
+        <div class="exp-card-body">
+          <p>JPQL에 JOIN FETCH를 명시하여 Team과 Members를 한 번의 쿼리로 로딩한다. DISTINCT로 중복 제거 필수.</p>
+          <div class="exp-result">✅ 결과: 1 SQL, DISTINCT 적용</div>
+        </div>
+      </div>
+
+      <!-- 7-3 -->
+      <div class="exp-card green">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-3</div>
+            <div class="exp-card-title">@EntityGraph 해결</div>
+          </div>
+          <span class="badge green">LEFT OUTER JOIN</span>
+        </div>
+        <div class="exp-card-body">
+          <p>Repository 메서드에 @EntityGraph를 붙여 자동 LEFT OUTER JOIN. JPQL 수정 없이 어노테이션만으로 적용.</p>
+          <div class="exp-result">✅ 결과: 1 SQL, 어노테이션만으로 완료</div>
+        </div>
+      </div>
+
+      <!-- 7-4 -->
+      <div class="exp-card amber">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-4</div>
+            <div class="exp-card-title">@ManyToOne N+1 (캐시)</div>
+          </div>
+          <span class="badge amber">1차 캐시</span>
+        </div>
+        <div class="exp-card-body">
+          <p>Member → Team 방향의 N+1. 동일 트랜잭션 내에서는 PersistenceContext 1차 캐시에 의해 Team이 재사용된다.</p>
+          <div class="exp-result">⚡ 결과: 중복 Team은 캐시 재사용</div>
+        </div>
+      </div>
+
+      <!-- 7-5 -->
+      <div class="exp-card green">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-5</div>
+            <div class="exp-card-title">DTO Projection</div>
+          </div>
+          <span class="badge green">PC 없음</span>
+        </div>
+        <div class="exp-card-body">
+          <p>JPQL에서 new DTO(...)로 직접 값만 조회. PersistenceContext에 엔티티를 올리지 않아 메모리 오버헤드가 없다.</p>
+          <div class="exp-result">✅ 결과: 1 SQL, PC 오버헤드 없음</div>
+        </div>
+      </div>
+
+      <!-- 7-6 -->
+      <div class="exp-card red">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-6</div>
+            <div class="exp-card-title">MultipleBagFetchException</div>
+          </div>
+          <span class="badge red">예외 발생</span>
+        </div>
+        <div class="exp-card-body">
+          <p>두 개의 List 타입 컬렉션을 동시에 JOIN FETCH 시 Hibernate가 MultipleBagFetchException을 던진다. Set 또는 순차 fetch로 해결.</p>
+          <div class="exp-result">⚠️ 결과: 예외 → Set 변환 또는 순차 fetch</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- SECTION 02: INTERACTIVE SIMULATOR -->
   <section>
-    <div class="sec-label cyan">Section 02</div>
+    <div class="sec-label cyan">Section 04</div>
     <h2 class="section-title">N+1 쿼리 시뮬레이터</h2>
     <p class="section-desc">각 시나리오를 클릭해 N+1이 어떻게 발생하고, 어떻게 해결되는지 단계별로 확인하라.</p>
 
@@ -1116,155 +1265,6 @@ SELECT * FROM member WHERE team_id = 5</div>
           <div class="counter-bar-fill" id="counter-bar" style="background: var(--dim)"></div>
         </div>
         <div class="counter-verdict" id="counter-verdict"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 03: SOLUTION COMPARISON TABLE -->
-  <section>
-    <div class="sec-label green">Section 03</div>
-    <h2 class="section-title">해결 방법 비교</h2>
-    <p class="section-desc">각 방법의 SQL 수, JOIN 타입, 특징을 한눈에 비교한다.</p>
-
-    <table class="cmp-table">
-      <thead>
-        <tr>
-          <th>방법</th>
-          <th>SQL 수</th>
-          <th>JOIN 타입</th>
-          <th>특징</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong style="color:var(--text-bright)">LAZY (기본)</strong></td>
-          <td><span class="badge red">1 + N</span></td>
-          <td><span style="color:var(--dim)">—</span></td>
-          <td style="color:var(--red)">N+1 발생, 컬렉션 접근 시 추가 SELECT</td>
-        </tr>
-        <tr>
-          <td><strong style="color:var(--text-bright)">JOIN FETCH</strong></td>
-          <td><span class="badge green">1</span></td>
-          <td><span class="badge cyan">INNER JOIN</span></td>
-          <td style="color:var(--text)">DISTINCT 필요, members 없는 팀 제외됨</td>
-        </tr>
-        <tr>
-          <td><strong style="color:var(--text-bright)">@EntityGraph</strong></td>
-          <td><span class="badge green">1</span></td>
-          <td><span class="badge green">LEFT OUTER JOIN</span></td>
-          <td style="color:var(--text)">어노테이션만으로 설정, members 없는 팀도 포함</td>
-        </tr>
-        <tr>
-          <td><strong style="color:var(--text-bright)">DTO Projection</strong></td>
-          <td><span class="badge green">1</span></td>
-          <td><span class="badge cyan">JOIN</span></td>
-          <td style="color:var(--text)">엔티티 미사용, PersistenceContext 오버헤드 없음</td>
-        </tr>
-        <tr>
-          <td><strong style="color:var(--text-bright)">@BatchSize</strong></td>
-          <td><span class="badge amber">1 + ⌈N/size⌉</span></td>
-          <td><span style="color:var(--dim)">—</span></td>
-          <td style="color:var(--text)">IN절 배치, 완전한 해결책은 아님</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
-
-  <!-- SECTION 04: 6 EXPERIMENT CARDS -->
-  <section>
-    <div class="sec-label purple">Section 04</div>
-    <h2 class="section-title">6가지 실험</h2>
-    <p class="section-desc">각 실험은 N+1의 발생 패턴 또는 해결 방법 하나를 집중적으로 검증한다.</p>
-
-    <div class="exp-grid">
-      <!-- 7-1 -->
-      <div class="exp-card red">
-        <div class="exp-card-header">
-          <div>
-            <div class="exp-card-num">실험 7-1</div>
-            <div class="exp-card-title">@OneToMany N+1 발생</div>
-          </div>
-          <span class="badge red">N+1</span>
-        </div>
-        <div class="exp-card-body">
-          <p>Team → Members 컬렉션에 LazyProxy가 적용된 상태에서 findAll() 후 각 팀의 members에 접근한다.</p>
-          <div class="exp-result">⚡ 결과: 1 + 5 = 6 SQL 실행</div>
-        </div>
-      </div>
-
-      <!-- 7-2 -->
-      <div class="exp-card green">
-        <div class="exp-card-header">
-          <div>
-            <div class="exp-card-num">실험 7-2</div>
-            <div class="exp-card-title">JOIN FETCH 해결</div>
-          </div>
-          <span class="badge green">INNER JOIN</span>
-        </div>
-        <div class="exp-card-body">
-          <p>JPQL에 JOIN FETCH를 명시하여 Team과 Members를 한 번의 쿼리로 로딩한다. DISTINCT로 중복 제거 필수.</p>
-          <div class="exp-result">✅ 결과: 1 SQL, DISTINCT 적용</div>
-        </div>
-      </div>
-
-      <!-- 7-3 -->
-      <div class="exp-card green">
-        <div class="exp-card-header">
-          <div>
-            <div class="exp-card-num">실험 7-3</div>
-            <div class="exp-card-title">@EntityGraph 해결</div>
-          </div>
-          <span class="badge green">LEFT OUTER JOIN</span>
-        </div>
-        <div class="exp-card-body">
-          <p>Repository 메서드에 @EntityGraph를 붙여 자동 LEFT OUTER JOIN. JPQL 수정 없이 어노테이션만으로 적용.</p>
-          <div class="exp-result">✅ 결과: 1 SQL, 어노테이션만으로 완료</div>
-        </div>
-      </div>
-
-      <!-- 7-4 -->
-      <div class="exp-card amber">
-        <div class="exp-card-header">
-          <div>
-            <div class="exp-card-num">실험 7-4</div>
-            <div class="exp-card-title">@ManyToOne N+1 (캐시)</div>
-          </div>
-          <span class="badge amber">1차 캐시</span>
-        </div>
-        <div class="exp-card-body">
-          <p>Member → Team 방향의 N+1. 동일 트랜잭션 내에서는 PersistenceContext 1차 캐시에 의해 Team이 재사용된다.</p>
-          <div class="exp-result">⚡ 결과: 중복 Team은 캐시 재사용</div>
-        </div>
-      </div>
-
-      <!-- 7-5 -->
-      <div class="exp-card green">
-        <div class="exp-card-header">
-          <div>
-            <div class="exp-card-num">실험 7-5</div>
-            <div class="exp-card-title">DTO Projection</div>
-          </div>
-          <span class="badge green">PC 없음</span>
-        </div>
-        <div class="exp-card-body">
-          <p>JPQL에서 new DTO(...)로 직접 값만 조회. PersistenceContext에 엔티티를 올리지 않아 메모리 오버헤드가 없다.</p>
-          <div class="exp-result">✅ 결과: 1 SQL, PC 오버헤드 없음</div>
-        </div>
-      </div>
-
-      <!-- 7-6 -->
-      <div class="exp-card red">
-        <div class="exp-card-header">
-          <div>
-            <div class="exp-card-num">실험 7-6</div>
-            <div class="exp-card-title">MultipleBagFetchException</div>
-          </div>
-          <span class="badge red">예외 발생</span>
-        </div>
-        <div class="exp-card-body">
-          <p>두 개의 List 타입 컬렉션을 동시에 JOIN FETCH 시 Hibernate가 MultipleBagFetchException을 던진다. Set 또는 순차 fetch로 해결.</p>
-          <div class="exp-result">⚠️ 결과: 예외 → Set 변환 또는 순차 fetch</div>
-        </div>
       </div>
     </div>
   </section>
