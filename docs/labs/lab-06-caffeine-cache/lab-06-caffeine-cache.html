@@ -866,6 +866,7 @@ body {
 
 @media (max-width: 900px) { .exp-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 500px) { .exp-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { #expSimBtns { grid-template-columns: repeat(2, 1fr) !important; } }
 
 .exp-card {
   background: var(--surface);
@@ -1585,6 +1586,28 @@ code {
       </div>
 
     </div>
+
+    <div class="exp-simulator" style="margin-top:32px;">
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; background:var(--surface2); border-bottom:1px solid var(--border);">
+          <span style="font-family:'Noto Sans KR',sans-serif; font-size:11px; color:var(--dim); letter-spacing:0.1em; text-transform:uppercase;">실험 시뮬레이터</span>
+          <button onclick="resetExpSim()" style="font-family:'Noto Sans KR',sans-serif; font-size:10px; padding:4px 10px; border-radius:5px; border:1px solid var(--border); background:transparent; color:var(--dim); cursor:pointer;">↺ RESET</button>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:14px 20px; border-bottom:1px solid var(--border);" id="expSimBtns">
+          <button class="sim-btn" onclick="runExpSim(1)">6-1 캐시 vs No캐시</button>
+          <button class="sim-btn" onclick="runExpSim(2)">6-2 Hit/Miss 통계</button>
+          <button class="sim-btn" onclick="runExpSim(3)">6-3 TTL 만료</button>
+          <button class="sim-btn" onclick="runExpSim(4)">6-4 Size Eviction</button>
+          <button class="sim-btn" onclick="runExpSim(5)">6-5 @CacheEvict</button>
+          <button class="sim-btn" onclick="runExpSim(6)">6-6 Put vs Evict</button>
+          <button class="sim-btn" onclick="runExpSim(7)">6-7 Stampede</button>
+          <button class="sim-btn" onclick="runExpSim(8)">6-8 조건부 캐싱</button>
+        </div>
+        <div id="expSimLog" style="padding:20px; font-family:'D2Coding',monospace; font-size:12px; line-height:1.8; min-height:200px; max-height:400px; overflow-y:auto; color:var(--text);">
+          <div style="color:var(--dim);">실험 버튼을 클릭하면 해당 실험의 동작 과정을 단계별로 보여줍니다.</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ════════════════════ SECTION 06: STAMPEDE ════════════════════ -->
@@ -2052,6 +2075,224 @@ function buildThreads() {
     d.className = 'thread-dot';
     el.appendChild(d);
   }
+}
+
+// ── EXPERIMENT SIMULATOR ──
+let expSimRunning = false;
+
+function resetExpSim() {
+  expSimRunning = false;
+  document.getElementById('expSimLog').innerHTML = '<div style="color:var(--dim);">실험 버튼을 클릭하면 해당 실험의 동작 과정을 단계별로 보여줍니다.</div>';
+  document.querySelectorAll('#expSimBtns .sim-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--text)';
+    b.style.background = 'var(--surface2)';
+  });
+}
+
+function expLog(html) {
+  const log = document.getElementById('expSimLog');
+  const line = document.createElement('div');
+  line.innerHTML = html;
+  line.style.opacity = '0';
+  line.style.transition = 'opacity 0.2s';
+  log.appendChild(line);
+  requestAnimationFrame(() => { line.style.opacity = '1'; });
+  log.scrollTop = log.scrollHeight;
+}
+
+function expSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setExpBtn(idx, color) {
+  const btns = document.querySelectorAll('#expSimBtns .sim-btn');
+  btns.forEach(b => { b.style.borderColor='var(--border)'; b.style.color='var(--text)'; b.style.background='var(--surface2)'; });
+  if (idx >= 1 && idx <= btns.length) {
+    const b = btns[idx-1];
+    b.style.borderColor = color;
+    b.style.color = color;
+    b.style.background = `color-mix(in srgb, ${color} 12%, transparent)`;
+  }
+}
+
+async function runExpSim(n) {
+  if (expSimRunning) return;
+  expSimRunning = true;
+  resetExpSim();
+  await expSleep(100);
+
+  const colors = { green:'var(--green)', cyan:'var(--cyan)', amber:'var(--amber)', red:'var(--red)', purple:'var(--purple)' };
+  const c = (color, text) => `<span style="color:${colors[color]||color}">${text}</span>`;
+
+  if (n===1) { setExpBtn(1,'var(--green)'); await exp1(c); }
+  else if (n===2) { setExpBtn(2,'var(--cyan)'); await exp2(c); }
+  else if (n===3) { setExpBtn(3,'var(--amber)'); await exp3(c); }
+  else if (n===4) { setExpBtn(4,'var(--amber)'); await exp4(c); }
+  else if (n===5) { setExpBtn(5,'var(--cyan)'); await exp5(c); }
+  else if (n===6) { setExpBtn(6,'var(--cyan)'); await exp6(c); }
+  else if (n===7) { setExpBtn(7,'var(--red)'); await exp7(c); }
+  else if (n===8) { setExpBtn(8,'var(--cyan)'); await exp8(c); }
+
+  expSimRunning = false;
+}
+
+async function exp1(c) {
+  expLog(c('green','━━ 실험 6-1: 캐시 없음 vs @Cacheable ━━'));
+  await expSleep(400);
+  expLog('');
+  expLog(c('amber','[캐시 없음] 100회 반복 조회 시작'));
+  for (let i=1; i<=5; i++) { await expSleep(150); expLog(`  SELECT * FROM product WHERE id=1  ${c('red','→ SQL 실행 #'+i)}`); }
+  await expSleep(100); expLog(`  ... (100회 반복)`);
+  await expSleep(300); expLog(c('red','  결과: SQL 100회 실행, '+c('amber','매번 DB 왕복')));
+  await expSleep(500);
+  expLog('');
+  expLog(c('green','[@Cacheable 적용] 100회 반복 조회 시작'));
+  await expSleep(200); expLog(`  1회차: Cache ${c('red','MISS')} → DB 조회 → ${c('cyan','Cache.put(1, Product)')}`);
+  await expSleep(200); expLog(`  2회차: Cache ${c('green','HIT')} → 캐시에서 즉시 반환 (SQL 없음)`);
+  await expSleep(150); expLog(`  3~100회: Cache ${c('green','HIT')} × 98회`);
+  await expSleep(300); expLog(c('green','  결과: SQL 1회만 실행! 99% DB 부하 제거'));
+  await expSleep(300); expLog(''); expLog(c('green','✓ @Cacheable이 메서드 실행 자체를 차단하여 DB 접근을 근본적으로 제거'));
+}
+
+async function exp2(c) {
+  expLog(c('cyan','━━ 실험 6-2: Cache Hit/Miss 통계 ━━'));
+  await expSleep(400);
+  expLog(''); expLog('5개 상품을 3회씩 조회 (총 15회)');
+  await expSleep(300);
+  for (let id=1; id<=5; id++) {
+    await expSleep(200); expLog(`  Product#${id} 1회차: ${c('red','MISS')} → DB 조회 → 캐시 저장`);
+  }
+  expLog(c('amber','  missCount = 5'));
+  await expSleep(300);
+  for (let id=1; id<=5; id++) {
+    await expSleep(100); expLog(`  Product#${id} 2회차: ${c('green','HIT')}`);
+  }
+  for (let id=1; id<=5; id++) {
+    await expSleep(80); expLog(`  Product#${id} 3회차: ${c('green','HIT')}`);
+  }
+  await expSleep(200); expLog(c('green','  hitCount = 10'));
+  await expSleep(300); expLog(''); expLog(`hitRate = 10 / 15 = ${c('cyan','66.7%')}`);
+  expLog(c('cyan','✓ recordStats()는 lock-free atomic counter 기반 — 성능 오버헤드 극소'));
+}
+
+async function exp3(c) {
+  expLog(c('amber','━━ 실험 6-3: TTL 만료와 DB 재조회 ━━'));
+  await expSleep(400);
+  expLog(''); expLog('TTL = 3초 캐시 설정 (expireAfterWrite)');
+  await expSleep(300);
+  expLog(`  조회 → ${c('red','MISS')} → DB 조회 → 캐시 저장 (writeTime 기록)`);
+  await expSleep(300);
+  expLog(`  5회 재조회 → ${c('green','HIT')} × 5 (TTL 이내)`);
+  await expSleep(200); expLog(c('green','  만료 전 SQL: 0회'));
+  await expSleep(500);
+  expLog('');
+  expLog(c('amber','  ⏳ 3.5초 경과... TTL 만료'));
+  await expSleep(600);
+  expLog(`  조회 → Caffeine이 ${c('purple','lazy expiration')} 수행`);
+  await expSleep(200); expLog('  → currentTime - writeTime > TTL → 엔트리 제거');
+  await expSleep(200); expLog(`  → ${c('red','MISS')} → DB 재조회 → 새 값 캐시 저장`);
+  await expSleep(200); expLog(c('amber','  만료 후 SQL: 1회'));
+  await expSleep(300); expLog(''); expLog(c('amber','✓ Caffeine 만료는 lazy 방식 — 다음 접근 시점에 만료를 확인'));
+}
+
+async function exp4(c) {
+  expLog(c('amber','━━ 실험 6-4: Size-based Eviction ━━'));
+  await expSleep(400);
+  expLog(''); expLog('maximumSize = 5 설정');
+  await expSleep(300);
+  for (let i=1; i<=5; i++) { await expSleep(200); expLog(`  put(key=${i}) → 캐시 크기: ${i}/5`); }
+  await expSleep(300); expLog(c('green','  5개 저장 완료 — 아직 eviction 없음'));
+  await expSleep(400);
+  expLog('');
+  expLog(`  put(key=6) → 캐시 초과! ${c('red','eviction 발생')}`);
+  await expSleep(300); expLog(`  → TinyLFU: 새 항목(key=6) vs 퇴거 후보의 ${c('purple','접근 빈도 비교')}`);
+  await expSleep(200); expLog(`  → 빈도 낮은 항목 ${c('red','퇴거')}`);
+  await expSleep(200);
+  for (let i=7; i<=10; i++) { await expSleep(150); expLog(`  put(key=${i}) → ${c('red','eviction')} 발생`); }
+  await expSleep(300); expLog(''); expLog(`최종: estimatedSize ≈ 5, evictionCount ≈ 5`);
+  expLog(c('amber','✓ Window TinyLFU는 접근 빈도 기반으로 퇴거하여 LRU보다 높은 hit rate'));
+}
+
+async function exp5(c) {
+  expLog(c('cyan','━━ 실험 6-5: @CacheEvict 캐시 무효화 ━━'));
+  await expSleep(400);
+  expLog(''); expLog('캐시 워밍업: Product#1 조회 → 캐시 저장');
+  await expSleep(300); expLog(`  5회 재조회 → ${c('green','HIT')} × 5 (SQL 0회)`);
+  await expSleep(400);
+  expLog('');
+  expLog(c('cyan','  @CacheEvict(key=1) 호출'));
+  await expSleep(200); expLog('  → CacheAspectSupport.execute()');
+  await expSleep(150); expLog('  → Cache.evict(key) → CaffeineCache.invalidate(1)');
+  await expSleep(150); expLog(c('red','  → key=1 캐시에서 삭제됨'));
+  await expSleep(400);
+  expLog('');
+  expLog(`  Product#1 재조회 → ${c('red','MISS')} (evict됨)`);
+  await expSleep(200); expLog(`  → DB 재조회 → ${c('cyan','Cache.put(1, Product)')} → 캐시 갱신`);
+  await expSleep(200); expLog(c('cyan','  evict 후 SQL: 1회'));
+  await expSleep(300); expLog(''); expLog(c('cyan','✓ @CacheEvict는 stale data를 방지하는 가장 기본적인 캐시 무효화 전략'));
+}
+
+async function exp6(c) {
+  expLog(c('cyan','━━ 실험 6-6: @CachePut vs @CacheEvict ━━'));
+  await expSleep(400);
+  expLog('');
+  expLog(c('green','[@CachePut — Write-Through]'));
+  await expSleep(300); expLog('  업데이트 호출 → DB 수정 + 캐시 즉시 갱신');
+  await expSleep(200); expLog(`  재조회 → ${c('green','HIT')} (SQL 0회) — 이미 최신값이 캐시에`);
+  await expSleep(200); expLog(c('green','  총 SQL: 업데이트 1회 + 재조회 0회'));
+  await expSleep(500);
+  expLog('');
+  expLog(c('amber','[@CacheEvict — Invalidation]'));
+  await expSleep(300); expLog('  업데이트 호출 → DB 수정 + 캐시 삭제');
+  await expSleep(200); expLog(`  재조회 → ${c('red','MISS')} → DB 재조회 (SQL 1회)`);
+  await expSleep(200); expLog(c('amber','  총 SQL: 업데이트 1회 + 재조회 1회'));
+  await expSleep(400);
+  expLog('');
+  expLog(`CachePut: ${c('green','즉시 일관성')} (write-through) — 항상 메서드 실행`);
+  expLog(`CacheEvict: ${c('amber','지연 로드')} (invalidation) — 단순하고 안전`);
+  await expSleep(200); expLog(''); expLog(c('cyan','✓ 읽기 빈도가 높으면 CachePut, 쓰기 후 즉시 읽지 않으면 CacheEvict'));
+}
+
+async function exp7(c) {
+  expLog(c('red','━━ 실험 6-7: Cache Stampede (Thundering Herd) ━━'));
+  await expSleep(400);
+  expLog(''); expLog('TTL=2초 캐시에 Product 저장 후 2.5초 대기');
+  await expSleep(400); expLog(c('amber','  ⏳ TTL 만료...'));
+  await expSleep(500);
+  expLog('');
+  expLog(c('red','  다수 스레드 동시 조회 시작!'));
+  await expSleep(200);
+  for (let i=1; i<=5; i++) { await expSleep(100); expLog(`  Thread-${i} → Cache ${c('red','MISS')} → DB 조회 시작...`); }
+  expLog('  ...');
+  await expSleep(100); expLog(`  Thread-N → Cache ${c('red','MISS')} → DB 조회 시작...`);
+  await expSleep(400);
+  expLog('');
+  expLog(c('red','  → 다수 스레드가 동시에 같은 SQL 실행'));
+  await expSleep(200); expLog(c('red','  → Connection Pool 커넥션 동시 점유'));
+  await expSleep(200); expLog(c('red','  → DB CPU/IO 급증 → 장애 위험!'));
+  await expSleep(400); expLog('');
+  expLog('해결: Caffeine.build(CacheLoader) / Probabilistic Early Expiration / Background Refresh');
+  await expSleep(200); expLog(c('red','✓ 단순 @Cacheable만으로는 Stampede를 방지할 수 없다'));
+}
+
+async function exp8(c) {
+  expLog(c('cyan','━━ 실험 6-8: 조건부 캐싱 ━━'));
+  await expSleep(400);
+  expLog(''); expLog('@Cacheable(unless = "#result == null") 설정');
+  await expSleep(400);
+  expLog('');
+  expLog(c('green','[존재하는 ID 조회]'));
+  await expSleep(200); expLog(`  1회차: ${c('red','MISS')} → DB 조회 → Product 반환 → unless=false → ${c('cyan','캐시 저장')}`);
+  await expSleep(200); expLog(`  2~5회차: ${c('green','HIT')} × 4 (SQL 없음)`);
+  await expSleep(200); expLog(c('green','  결과: SQL 1회'));
+  await expSleep(400);
+  expLog('');
+  expLog(c('amber','[존재하지 않는 ID 조회]'));
+  await expSleep(200); expLog(`  1회차: ${c('red','MISS')} → DB 조회 → null 반환 → unless=true → ${c('red','캐시 저장 안 함!')}`);
+  await expSleep(200); expLog(`  2회차: ${c('red','MISS')} → DB 조회 → null → 캐시 저장 안 함`);
+  await expSleep(150); expLog(`  3~5회차: ${c('red','MISS')} × 3 (매번 DB 조회)`);
+  await expSleep(200); expLog(c('amber','  결과: SQL 5회 (매번 miss)'));
+  await expSleep(400); expLog('');
+  expLog(c('cyan','✓ unless로 Negative Cache를 방지하되, 존재하지 않는 키가 많으면 DB 부하 주의'));
 }
 
 // ─── INIT ───
