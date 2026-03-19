@@ -1023,94 +1023,10 @@ Outer TX ───── <span style="color:var(--dim)">[SUSPENDED]</span> ─�
   </div>
 
   <!-- ═══════════════════════════════════════════════
-       SECTION 02 — INTERACTIVE SIMULATOR
+       SECTION 02 — 9 EXPERIMENT CARDS
   ═══════════════════════════════════════════════ -->
   <div class="section">
-    <div class="sec-label purple">Section 02 — Interactive Simulator</div>
-    <h2 class="section-title">트랜잭션 전파 시뮬레이터</h2>
-    <p class="section-desc">시나리오를 선택하고 단계별로 실행하면서 트랜잭션의 상태 변화를 관찰하세요</p>
-
-    <div class="simulator-wrap">
-      <!-- Controls -->
-      <div class="sim-controls">
-        <button class="sim-btn active cyan" onclick="selectScenario('required')" id="btn-required">
-          REQUIRED (참여)
-        </button>
-        <button class="sim-btn" onclick="selectScenario('requires_new')" id="btn-requires_new">
-          REQUIRES_NEW (독립)
-        </button>
-        <button class="sim-btn" onclick="selectScenario('rollback_trap')" id="btn-rollback_trap">
-          REQUIRED 롤백 트랩
-        </button>
-        <button class="sim-btn" onclick="selectScenario('required_creates')" id="btn-required_creates">REQUIRED 새 TX 생성</button>
-        <button class="sim-btn" onclick="selectScenario('rn_inner_throws')" id="btn-rn_inner_throws">REQUIRES_NEW 예외 격리</button>
-        <button class="sim-btn" onclick="selectScenario('outer_fails')" id="btn-outer_fails">Outer 실패, Inner 생존</button>
-        <button class="sim-btn" onclick="selectScenario('rollback_deep')" id="btn-rollback_deep">롤백 심화 (3시나리오)</button>
-        <button class="sim-btn" onclick="selectScenario('connection_sep')" id="btn-connection_sep">커넥션 분리</button>
-        <button class="sim-btn" onclick="selectScenario('pool_exhaust')" id="btn-pool_exhaust">커넥션 풀 고갈</button>
-      </div>
-
-      <!-- Diagram Stage -->
-      <div class="sim-stage">
-        <div class="tx-canvas" id="tx-canvas">
-          <!-- Outer TX -->
-          <div class="tx-area">
-            <div class="tx-area-label">Outer Method</div>
-            <div class="tx-box outer-default" id="outer-box">
-              <div class="tx-box-inner">
-                <div class="tx-box-name" id="outer-name">OUTER TX</div>
-                <div class="tx-box-id" id="outer-id">conn-42</div>
-                <div class="tx-box-status" id="outer-status">ACTIVE</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Arrow -->
-          <div class="tx-arrow" id="tx-arrow">
-            <span id="arrow-label">호출</span>
-            <span style="font-size:24px; color:#ffffff">&#8594;</span>
-          </div>
-
-          <!-- Inner TX -->
-          <div class="tx-area">
-            <div class="tx-area-label">Inner Method</div>
-            <div class="tx-box inner-joined" id="inner-box">
-              <div class="tx-box-inner">
-                <div class="tx-box-name" id="inner-name">INNER TX</div>
-                <div class="tx-box-id" id="inner-id">conn-42</div>
-                <div class="tx-box-status" id="inner-status">JOINED</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step dots + Nav -->
-      <div class="sim-step-indicator">
-        <div id="step-dots"></div>
-        <span class="sim-step-label" id="step-label">시나리오를 선택하세요</span>
-        <div class="sim-nav">
-          <button class="sim-nav-btn" id="btn-prev" onclick="prevStep()" disabled>&#9664; 이전</button>
-          <button class="sim-nav-btn" id="btn-next" onclick="nextStep()">다음 &#9654;</button>
-        </div>
-      </div>
-
-      <!-- Console -->
-      <div class="sim-console" id="sim-console">
-        <div class="console-line" style="animation-delay:0s">
-          <span class="console-ts">00:00:00.000</span>
-          <span class="console-level info">INFO</span>
-          <span class="console-msg">시뮬레이터 준비. 위에서 시나리오를 선택하세요.</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════════
-       SECTION 03 — 9 EXPERIMENT CARDS
-  ═══════════════════════════════════════════════ -->
-  <div class="section">
-    <div class="sec-label">Section 03 — Experiments</div>
+    <div class="sec-label">Section 02 — Experiments</div>
     <h2 class="section-title">9가지 실험 목록</h2>
     <p class="section-desc">각 실험은 트랜잭션 전파의 특정 동작을 검증합니다</p>
 
@@ -1212,6 +1128,90 @@ Outer TX ───── <span style="color:var(--dim)">[SUSPENDED]</span> ─�
         </div>
         <div class="exp-obs">REQUIRES_NEW를 중첩 루프에서 사용 시 커넥션 풀이 고갈되어 HikariPool timeout 발생. 실무 위험 시연.</div>
         <span class="exp-tag">풀 고갈 위험</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 03 — INTERACTIVE SIMULATOR
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label purple">Section 03 — Interactive Simulator</div>
+    <h2 class="section-title">트랜잭션 전파 시뮬레이터</h2>
+    <p class="section-desc">시나리오를 선택하고 단계별로 실행하면서 트랜잭션의 상태 변화를 관찰하세요</p>
+
+    <div class="simulator-wrap">
+      <!-- Controls -->
+      <div class="sim-controls">
+        <button class="sim-btn active cyan" onclick="selectScenario('required')" id="btn-required">
+          REQUIRED (참여)
+        </button>
+        <button class="sim-btn" onclick="selectScenario('requires_new')" id="btn-requires_new">
+          REQUIRES_NEW (독립)
+        </button>
+        <button class="sim-btn" onclick="selectScenario('rollback_trap')" id="btn-rollback_trap">
+          REQUIRED 롤백 트랩
+        </button>
+        <button class="sim-btn" onclick="selectScenario('required_creates')" id="btn-required_creates">REQUIRED 새 TX 생성</button>
+        <button class="sim-btn" onclick="selectScenario('rn_inner_throws')" id="btn-rn_inner_throws">REQUIRES_NEW 예외 격리</button>
+        <button class="sim-btn" onclick="selectScenario('outer_fails')" id="btn-outer_fails">Outer 실패, Inner 생존</button>
+        <button class="sim-btn" onclick="selectScenario('rollback_deep')" id="btn-rollback_deep">롤백 심화 (3시나리오)</button>
+        <button class="sim-btn" onclick="selectScenario('connection_sep')" id="btn-connection_sep">커넥션 분리</button>
+        <button class="sim-btn" onclick="selectScenario('pool_exhaust')" id="btn-pool_exhaust">커넥션 풀 고갈</button>
+      </div>
+
+      <!-- Diagram Stage -->
+      <div class="sim-stage">
+        <div class="tx-canvas" id="tx-canvas">
+          <!-- Outer TX -->
+          <div class="tx-area">
+            <div class="tx-area-label">Outer Method</div>
+            <div class="tx-box outer-default" id="outer-box">
+              <div class="tx-box-inner">
+                <div class="tx-box-name" id="outer-name">OUTER TX</div>
+                <div class="tx-box-id" id="outer-id">conn-42</div>
+                <div class="tx-box-status" id="outer-status">ACTIVE</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Arrow -->
+          <div class="tx-arrow" id="tx-arrow">
+            <span id="arrow-label">호출</span>
+            <span style="font-size:24px; color:#ffffff">&#8594;</span>
+          </div>
+
+          <!-- Inner TX -->
+          <div class="tx-area">
+            <div class="tx-area-label">Inner Method</div>
+            <div class="tx-box inner-joined" id="inner-box">
+              <div class="tx-box-inner">
+                <div class="tx-box-name" id="inner-name">INNER TX</div>
+                <div class="tx-box-id" id="inner-id">conn-42</div>
+                <div class="tx-box-status" id="inner-status">JOINED</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step dots + Nav -->
+      <div class="sim-step-indicator">
+        <div id="step-dots"></div>
+        <span class="sim-step-label" id="step-label">시나리오를 선택하세요</span>
+        <div class="sim-nav">
+          <button class="sim-nav-btn" id="btn-prev" onclick="prevStep()" disabled>&#9664; 이전</button>
+          <button class="sim-nav-btn" id="btn-next" onclick="nextStep()">다음 &#9654;</button>
+        </div>
+      </div>
+
+      <!-- Console -->
+      <div class="sim-console" id="sim-console">
+        <div class="console-line" style="animation-delay:0s">
+          <span class="console-ts">00:00:00.000</span>
+          <span class="console-level info">INFO</span>
+          <span class="console-msg">시뮬레이터 준비. 위에서 시나리오를 선택하세요.</span>
+        </div>
       </div>
     </div>
   </div>
