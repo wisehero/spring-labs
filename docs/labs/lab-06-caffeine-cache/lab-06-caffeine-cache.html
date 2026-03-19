@@ -498,6 +498,7 @@ body {
   border-radius: 12px;
   padding: 16px;
   min-height: 160px;
+  position: relative;
 }
 
 .cache-header {
@@ -1946,12 +1947,7 @@ function showBadge(type, text) {
   const badge     = document.createElement('div');
   badge.className = `flash-badge ${type}`;
   badge.textContent = text;
-  badge.style.position    = 'relative';
-  badge.style.display     = 'inline-block';
-  badge.style.marginBottom= '8px';
-  badge.style.left        = '50%';
-  badge.style.transform   = 'translateX(-50%)';
-  container.insertBefore(badge, container.firstChild);
+  container.appendChild(badge);
   setTimeout(() => badge.remove(), 1000);
 }
 
