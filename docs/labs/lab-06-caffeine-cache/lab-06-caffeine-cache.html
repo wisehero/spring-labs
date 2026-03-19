@@ -1669,20 +1669,30 @@ function updateStats() {
 
 function renderCache() {
   const entries  = document.getElementById('cacheEntries');
-  const emptyMsg = document.getElementById('cacheEmptyMsg');
   const badge    = document.getElementById('cacheSizeBadge');
   const keys     = Object.keys(state.cache);
 
   badge.textContent = keys.length + ' entr' + (keys.length === 1 ? 'y' : 'ies');
 
+  // 기존 엔트리만 제거 (emptyMsg는 보존)
+  entries.querySelectorAll('.cache-entry').forEach(el => el.remove());
+
+  // emptyMsg가 없으면 다시 생성
+  let emptyMsg = document.getElementById('cacheEmptyMsg');
+  if (!emptyMsg) {
+    emptyMsg = document.createElement('div');
+    emptyMsg.className = 'cache-empty';
+    emptyMsg.id = 'cacheEmptyMsg';
+    emptyMsg.textContent = '캐시가 비어있습니다';
+    entries.appendChild(emptyMsg);
+  }
+
   if (keys.length === 0) {
-    entries.innerHTML = '';
-    if (!emptyMsg.parentNode) entries.appendChild(emptyMsg);
     emptyMsg.style.display = 'block';
     return;
   }
+
   emptyMsg.style.display = 'none';
-  entries.innerHTML = '';
   keys.forEach(k => {
     const item = state.cache[k];
     const el   = document.createElement('div');
