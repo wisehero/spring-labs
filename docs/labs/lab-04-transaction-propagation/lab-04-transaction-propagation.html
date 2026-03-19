@@ -1143,21 +1143,15 @@ Outer TX ───── <span style="color:var(--dim)">[SUSPENDED]</span> ─�
     <div class="simulator-wrap">
       <!-- Controls -->
       <div class="sim-controls">
-        <button class="sim-btn active cyan" onclick="selectScenario('required')" id="btn-required">
-          REQUIRED (참여)
-        </button>
-        <button class="sim-btn" onclick="selectScenario('requires_new')" id="btn-requires_new">
-          REQUIRES_NEW (독립)
-        </button>
-        <button class="sim-btn" onclick="selectScenario('rollback_trap')" id="btn-rollback_trap">
-          REQUIRED 롤백 트랩
-        </button>
-        <button class="sim-btn" onclick="selectScenario('required_creates')" id="btn-required_creates">REQUIRED 새 TX 생성</button>
-        <button class="sim-btn" onclick="selectScenario('rn_inner_throws')" id="btn-rn_inner_throws">REQUIRES_NEW 예외 격리</button>
-        <button class="sim-btn" onclick="selectScenario('outer_fails')" id="btn-outer_fails">Outer 실패, Inner 생존</button>
-        <button class="sim-btn" onclick="selectScenario('rollback_deep')" id="btn-rollback_deep">롤백 심화 (3시나리오)</button>
-        <button class="sim-btn" onclick="selectScenario('connection_sep')" id="btn-connection_sep">커넥션 분리</button>
-        <button class="sim-btn" onclick="selectScenario('pool_exhaust')" id="btn-pool_exhaust">커넥션 풀 고갈</button>
+        <button class="sim-btn active cyan" onclick="selectScenario('required')" id="btn-required">4-1 REQUIRED 참여</button>
+        <button class="sim-btn" onclick="selectScenario('required_creates')" id="btn-required_creates">4-2 REQUIRED 새 TX</button>
+        <button class="sim-btn" onclick="selectScenario('requires_new')" id="btn-requires_new">4-3 REQUIRES_NEW 독립</button>
+        <button class="sim-btn" onclick="selectScenario('rollback_trap')" id="btn-rollback_trap">4-4 롤백 트랩</button>
+        <button class="sim-btn" onclick="selectScenario('rn_inner_throws')" id="btn-rn_inner_throws">4-5 예외 격리</button>
+        <button class="sim-btn" onclick="selectScenario('outer_fails')" id="btn-outer_fails">4-6 Inner 생존</button>
+        <button class="sim-btn" onclick="selectScenario('rollback_deep')" id="btn-rollback_deep">4-7 롤백 심화</button>
+        <button class="sim-btn" onclick="selectScenario('connection_sep')" id="btn-connection_sep">4-8 커넥션 분리</button>
+        <button class="sim-btn" onclick="selectScenario('pool_exhaust')" id="btn-pool_exhaust">4-9 풀 고갈</button>
       </div>
 
       <!-- Diagram Stage -->
