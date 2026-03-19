@@ -2085,7 +2085,7 @@ function resetExpSim() {
   document.getElementById('expSimLog').innerHTML = '<div style="color:var(--dim);">실험 버튼을 클릭하면 해당 실험의 동작 과정을 단계별로 보여줍니다.</div>';
   document.querySelectorAll('#expSimBtns .sim-btn').forEach(b => {
     b.style.borderColor = 'var(--border)';
-    b.style.color = 'var(--text)';
+    b.style.color = 'var(--text-bright)';
     b.style.background = 'var(--surface2)';
   });
 }
@@ -2105,7 +2105,7 @@ function expSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function setExpBtn(idx, color) {
   const btns = document.querySelectorAll('#expSimBtns .sim-btn');
-  btns.forEach(b => { b.style.borderColor='var(--border)'; b.style.color='var(--text)'; b.style.background='var(--surface2)'; });
+  btns.forEach(b => { b.style.borderColor='var(--border)'; b.style.color='var(--text-bright)'; b.style.background='var(--surface2)'; });
   if (idx >= 1 && idx <= btns.length) {
     const b = btns[idx-1];
     b.style.borderColor = color;
