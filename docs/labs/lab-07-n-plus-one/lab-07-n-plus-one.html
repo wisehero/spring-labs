@@ -1132,6 +1132,7 @@ SELECT * FROM member WHERE team_id = 5</div>
           <button class="sim-btn" id="btn-fetch" onclick="runScenario('fetch')">JOIN FETCH</button>
           <button class="sim-btn" id="btn-entity" onclick="runScenario('entity')">@EntityGraph</button>
           <button class="sim-btn" id="btn-dto" onclick="runScenario('dto')">DTO Projection</button>
+          <button class="sim-btn" id="btn-many" onclick="runScenario('many')">@ManyToOne N+1 (1차 캐시)</button>
         </div>
       </div>
 
@@ -1635,7 +1636,7 @@ function setCounter(count, max, color, verdict, verdictColor) {
 
 // Set all button states
 function setActiveBtn(activeId, cls) {
-  ['btn-lazy','btn-fetch','btn-entity','btn-dto'].forEach(id => {
+  ['btn-lazy','btn-fetch','btn-entity','btn-dto','btn-many'].forEach(id => {
     const btn = document.getElementById(id);
     btn.className = 'sim-btn';
   });
@@ -1826,6 +1827,84 @@ async function runDto() {
   await tLine('✓  읽기 전용 조회에 최적화된 방법', 'note', 100);
 }
 
+// ── SCENARIO: @ManyToOne N+1 (PersistenceContext 1차 캐시) ──
+async function runManyToOne() {
+  setActiveBtn('btn-many', 'purple');
+  clearTerminal();
+  resetDbRows();
+  setCounter(0, 6, 'var(--dim)', '', '');
+
+  await tLine('$ 실험 7-4: @ManyToOne N+1 (PersistenceContext 1차 캐시)', 'prompt', 300);
+  await tLine('', 'blank', 100);
+
+  // Step 1: Load all members
+  await tLine('▸ memberRepository.findAllByNamePrefix("NPLUS-")', 'prompt', 300);
+  await tLine('  Hibernate:', 'note', 200);
+  await tLine("  SELECT * FROM member WHERE name LIKE 'NPLUS-%'", 'sql', 200);
+
+  dimAllRows();
+  lightUp([
+    'mem-1-1','mem-1-2','mem-1-3',
+    'mem-2-1','mem-2-2','mem-2-3',
+    'mem-3-1','mem-3-2','mem-3-3',
+    'mem-4-1','mem-4-2','mem-4-3',
+    'mem-5-1','mem-5-2','mem-5-3',
+  ], 'queried-member');
+  await tLine('  → 15명 Member 로딩 (team 필드는 LazyProxy)', 'note', 400);
+  setCounter(1, 6, 'var(--green)', '1 SQL — Member 전체 조회', 'var(--green)');
+  await tLine('', 'blank', 200);
+
+  // Step 2: Access team for each member group
+  await tLine('▸ members.forEach { member.team.name }', 'prompt', 300);
+  await tLine('', 'blank', 100);
+
+  // Team Alpha (members 1,2,3 → mem-1-1, mem-1-2, mem-1-3)
+  await tLine('  member[1].team → LazyProxy 초기화', 'warn', 300);
+  await tLine('  SELECT * FROM team WHERE id = 1', 'sql', 200);
+  lightUp(['team-1'], 'queried-team');
+  await tLine('  → Team Alpha 로딩 (PersistenceContext에 캐시)', 'note', 300);
+  setCounter(2, 6, 'var(--amber)', '2 SQL', 'var(--amber)');
+  await tLine('  member[2].team → 1차 캐시 HIT! (SQL 없음)', 'note', 250);
+  await tLine('  member[3].team → 1차 캐시 HIT! (SQL 없음)', 'note', 250);
+  await tLine('', 'blank', 150);
+
+  // Team Beta (members 4,5,6 → mem-2-1, mem-2-2, mem-2-3)
+  await tLine('  member[4].team → LazyProxy 초기화', 'warn', 300);
+  await tLine('  SELECT * FROM team WHERE id = 2', 'sql', 200);
+  lightUp(['team-2'], 'queried-team');
+  await tLine('  → Team Beta 로딩', 'note', 300);
+  setCounter(3, 6, 'var(--amber)', '3 SQL', 'var(--amber)');
+  await tLine('  member[5].team → 1차 캐시 HIT!', 'note', 200);
+  await tLine('  member[6].team → 1차 캐시 HIT!', 'note', 200);
+  await tLine('', 'blank', 150);
+
+  // Team Gamma (members 7,8,9 → mem-3-*)
+  await tLine('  member[7].team → SELECT * FROM team WHERE id = 3', 'sql', 200);
+  lightUp(['team-3'], 'queried-team');
+  setCounter(4, 6, 'var(--amber)', '4 SQL', 'var(--amber)');
+  await tLine('  member[8,9].team → 1차 캐시 HIT!', 'note', 200);
+  await tLine('', 'blank', 100);
+
+  // Team Delta (members 10,11,12 → mem-4-*)
+  await tLine('  member[10].team → SELECT * FROM team WHERE id = 4', 'sql', 200);
+  lightUp(['team-4'], 'queried-team');
+  setCounter(5, 6, 'var(--red)', '5 SQL', 'var(--red)');
+  await tLine('  member[11,12].team → 1차 캐시 HIT!', 'note', 200);
+  await tLine('', 'blank', 100);
+
+  // Team Epsilon (members 13,14,15 → mem-5-*)
+  await tLine('  member[13].team → SELECT * FROM team WHERE id = 5', 'sql', 200);
+  lightUp(['team-5'], 'queried-team');
+  setCounter(6, 6, 'var(--red)', '⚡ 6 SQL (1 + 5 고유 팀)', 'var(--red)');
+  await tLine('  member[14,15].team → 1차 캐시 HIT!', 'note', 200);
+
+  await tLine('', 'blank', 200);
+  await tLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'prompt', 200);
+  await tLine('⚠  총 SQL: 1 + 5 = 6  (15명이지만 고유 팀 5개 → 캐시 덕에 N=5)', 'warn', 100);
+  await tLine('💡 1차 캐시가 없었다면 1 + 15 = 16 SQL이었을 것', 'note', 100);
+  await tLine('💡 해결: Member 조회 시 JOIN FETCH m.team 사용', 'note', 100);
+}
+
 // Main dispatcher
 function runScenario(name) {
   if (animationRunning) {
@@ -1840,6 +1919,7 @@ function runScenario(name) {
   if (name === 'fetch')  p = runFetch();
   if (name === 'entity') p = runEntity();
   if (name === 'dto')    p = runDto();
+  if (name === 'many')   p = runManyToOne();
 
   p.then(() => { animationRunning = false; });
 }
