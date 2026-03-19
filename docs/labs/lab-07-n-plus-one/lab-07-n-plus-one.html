@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 07 — N+1 문제를 6가지 방법으로 해결하기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+:root {
+  --void: #08090e;
+  --surface: #11131a;
+  --surface2: #191c27;
+  --border: #2a2f42;
+  --text: #c8cdd8;
+  --text-bright: #eef0f6;
+  --dim: #9ca3b0;
+  --cyan: #00d4ff;
+  --cyan-dim: rgba(0,212,255,0.12);
+  --amber: #ffb800;
+  --amber-dim: rgba(255,184,0,0.12);
+  --red: #ff4d6a;
+  --red-dim: rgba(255,77,106,0.10);
+  --green: #00e68a;
+  --green-dim: rgba(0,230,138,0.10);
+  --purple: #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 40% at 20% 0%, rgba(0,212,255,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(167,139,250,0.04) 0%, transparent 60%);
+}
+
+.page-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 28px 80px;
+}
+
+/* ─── MASTHEAD ─── */
+.masthead {
+  padding: 80px 0 64px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 64px;
+}
+
+.masthead-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: var(--cyan);
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: 20px;
+  margin-bottom: 28px;
+}
+
+.masthead h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(38px, 5vw, 62px);
+  font-weight: 400;
+  color: var(--text-bright);
+  line-height: 1.15;
+  margin-bottom: 24px;
+  white-space: pre-line;
+}
+
+.masthead h1 em {
+  font-style: italic;
+  background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.masthead-sub {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 17px;
+  color: var(--dim);
+  max-width: 680px;
+  line-height: 1.75;
+}
+
+/* ─── SEC LABEL ─── */
+.sec-label {
+  display: inline-flex;
+  align-items: center;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 20px;
+}
+.sec-label.cyan  { background: var(--cyan-dim);   border: 1px solid rgba(0,212,255,0.25); color: var(--cyan); }
+.sec-label.amber { background: var(--amber-dim);  border: 1px solid rgba(255,184,0,0.25);  color: var(--amber); }
+.sec-label.red   { background: var(--red-dim);    border: 1px solid rgba(255,77,106,0.25); color: var(--red); }
+.sec-label.green { background: var(--green-dim);  border: 1px solid rgba(0,230,138,0.25);  color: var(--green); }
+.sec-label.purple{ background: var(--purple-dim); border: 1px solid rgba(167,139,250,0.25);color: var(--purple); }
+
+.section-title {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 8px;
+}
+
+.section-desc {
+  font-family: 'Noto Sans KR', sans-serif;
+  color: var(--dim);
+  font-size: 14px;
+  margin-bottom: 36px;
+  max-width: 640px;
+}
+
+section { margin-bottom: 80px; }
+
+/* ─── METRICS ─── */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 80px;
+}
+
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.metric-card:hover { transform: translateY(-2px); }
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.metric-card.red::before    { background: var(--red); }
+.metric-card.green::before  { background: var(--green); }
+.metric-card.cyan::before   { background: var(--cyan); }
+.metric-card.purple::before { background: var(--purple); }
+
+.metric-num {
+  font-family: 'DM Serif Display', serif;
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.metric-card.red    .metric-num { color: var(--red); }
+.metric-card.green  .metric-num { color: var(--green); }
+.metric-card.cyan   .metric-num { color: var(--cyan); }
+.metric-card.purple .metric-num { color: var(--purple); }
+
+.metric-label {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* ─── STEP FLOW ─── */
+.step-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  position: relative;
+  padding-bottom: 28px;
+}
+
+.step-item:last-child { padding-bottom: 0; }
+
+.step-item::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 44px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.step-item:last-child::before { display: none; }
+
+.step-badge {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'D2Coding', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--cyan);
+  position: relative;
+  z-index: 1;
+}
+
+.step-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 22px;
+  flex: 1;
+}
+
+.step-title {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+}
+
+.step-code {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  color: var(--cyan);
+  background: rgba(0,212,255,0.06);
+  border: 1px solid rgba(0,212,255,0.15);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  white-space: pre;
+}
+
+.step-note {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+/* ─── DANGER CALLOUT ─── */
+.callout {
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-top: 28px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.callout.danger {
+  background: var(--red-dim);
+  border: 1px solid rgba(255,77,106,0.3);
+}
+.callout.info {
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0,212,255,0.25);
+}
+.callout-icon {
+  font-size: 18px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.callout-text {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.callout-text strong {
+  color: var(--red);
+  font-weight: 700;
+}
+.callout.info .callout-text strong { color: var(--cyan); }
+
+/* ─── SIMULATOR ─── */
+.simulator {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.sim-header {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sim-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 18px;
+  color: var(--text-bright);
+}
+
+.sim-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sim-btn {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--dim);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sim-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.sim-btn.active-red    { border-color: var(--red);    background: var(--red-dim);    color: var(--red);    }
+.sim-btn.active-green  { border-color: var(--green);  background: var(--green-dim);  color: var(--green);  }
+.sim-btn.active-cyan   { border-color: var(--cyan);   background: var(--cyan-dim);   color: var(--cyan);   }
+.sim-btn.active-purple { border-color: var(--purple); background: var(--purple-dim); color: var(--purple); }
+
+.sim-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.sim-db {
+  padding: 24px;
+  border-right: 1px solid var(--border);
+}
+
+.sim-console {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sim-section-label {
+  font-family: 'D2Coding', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sim-section-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.db-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.db-table-wrap { }
+
+.db-table-title {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.db-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  margin-bottom: 4px;
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  transition: all 0.3s ease;
+}
+
+.db-row .col {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.db-row.team-row .col.pk { background: rgba(0,212,255,0.15); color: var(--cyan); }
+.db-row.member-row .col.pk { background: rgba(255,184,0,0.15); color: var(--amber); }
+.db-row.member-row .col.fk { background: rgba(167,139,250,0.12); color: var(--purple); }
+
+.db-row.queried-team {
+  border-color: var(--cyan);
+  background: rgba(0,212,255,0.08);
+  color: var(--text-bright);
+  box-shadow: 0 0 8px rgba(0,212,255,0.2);
+}
+
+.db-row.queried-member {
+  border-color: var(--amber);
+  background: rgba(255,184,0,0.08);
+  color: var(--text-bright);
+  box-shadow: 0 0 8px rgba(255,184,0,0.2);
+}
+
+.db-row.partial-highlight {
+  border-color: var(--green);
+  background: rgba(0,230,138,0.06);
+  color: var(--text);
+}
+
+.db-row.dimmed {
+  opacity: 0.25;
+}
+
+.terminal {
+  background: #0c0e14;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  height: 280px;
+  overflow-y: auto;
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  flex: 1;
+}
+
+.terminal::-webkit-scrollbar { width: 4px; }
+.terminal::-webkit-scrollbar-track { background: transparent; }
+.terminal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.t-line {
+  margin-bottom: 3px;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease;
+}
+.t-line.prompt { color: var(--dim); }
+.t-line.sql { color: var(--cyan); }
+.t-line.sql-member { color: var(--amber); }
+.t-line.note { color: var(--green); }
+.t-line.warn { color: var(--red); }
+.t-line.blank { height: 8px; }
+.t-line.info { color: var(--purple); }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── QUERY COUNTER ─── */
+.sim-counter {
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.counter-label {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.counter-num-display {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px;
+  font-weight: 400;
+  transition: color 0.4s;
+}
+
+.counter-bar-track {
+  height: 10px;
+  background: var(--surface);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.counter-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.4s ease, background 0.4s;
+  width: 0%;
+}
+
+.counter-verdict {
+  margin-top: 12px;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  min-height: 24px;
+  transition: all 0.3s;
+}
+
+/* ─── COMPARISON TABLE ─── */
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+}
+
+.cmp-table th {
+  background: var(--surface2);
+  color: var(--dim);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 14px 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.cmp-table td {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.cmp-table tr:last-child td { border-bottom: none; }
+.cmp-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+.badge.red    { background: var(--red-dim);    border: 1px solid rgba(255,77,106,0.3);  color: var(--red); }
+.badge.green  { background: var(--green-dim);  border: 1px solid rgba(0,230,138,0.3);   color: var(--green); }
+.badge.amber  { background: var(--amber-dim);  border: 1px solid rgba(255,184,0,0.3);   color: var(--amber); }
+.badge.cyan   { background: var(--cyan-dim);   border: 1px solid rgba(0,212,255,0.3);   color: var(--cyan); }
+.badge.purple { background: var(--purple-dim); border: 1px solid rgba(167,139,250,0.3); color: var(--purple); }
+
+/* ─── EXPERIMENT CARDS ─── */
+.exp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.exp-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.exp-card:hover { transform: translateY(-3px); }
+
+.exp-card-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exp-card.red    .exp-card-header { background: var(--red-dim);    border-bottom: 1px solid rgba(255,77,106,0.2); }
+.exp-card.green  .exp-card-header { background: var(--green-dim);  border-bottom: 1px solid rgba(0,230,138,0.2); }
+.exp-card.amber  .exp-card-header { background: var(--amber-dim);  border-bottom: 1px solid rgba(255,184,0,0.2); }
+
+.exp-card-num {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.exp-card.red   .exp-card-num { color: var(--red); }
+.exp-card.green .exp-card-num { color: var(--green); }
+.exp-card.amber .exp-card-num { color: var(--amber); }
+
+.exp-card-title {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1.4;
+}
+
+.exp-card-body {
+  padding: 18px 20px;
+}
+
+.exp-card-body p {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 12px;
+  line-height: 1.65;
+}
+
+.exp-result {
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.exp-card.red   .exp-result { background: var(--red-dim);   border: 1px solid rgba(255,77,106,0.2); color: var(--red); }
+.exp-card.green .exp-result { background: var(--green-dim); border: 1px solid rgba(0,230,138,0.2);  color: var(--green); }
+.exp-card.amber .exp-result { background: var(--amber-dim); border: 1px solid rgba(255,184,0,0.2);  color: var(--amber); }
+
+/* ─── SIDE BY SIDE COMPARE ─── */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.compare-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.compare-card-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.compare-card.cyan  .compare-card-header { background: var(--cyan-dim);   border-bottom-color: rgba(0,212,255,0.2); }
+.compare-card.green .compare-card-header { background: var(--green-dim);  border-bottom-color: rgba(0,230,138,0.2); }
+
+.compare-card-header h3 {
+  font-family: 'D2Coding', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.compare-card.cyan  .compare-card-header h3 { color: var(--cyan); }
+.compare-card.green .compare-card-header h3 { color: var(--green); }
+
+.compare-card-header p {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.compare-card-body {
+  padding: 20px 22px;
+}
+
+.compare-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+}
+.compare-row .label {
+  color: var(--dim);
+  flex-shrink: 0;
+  width: 90px;
+  font-size: 12px;
+}
+.compare-row .value {
+  color: var(--text-bright);
+  font-weight: 500;
+}
+
+/* ─── CODE TABS ─── */
+.code-tabs {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.code-tab-bar {
+  display: flex;
+  gap: 0;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.code-tab-btn {
+  font-family: 'D2Coding', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 12px 18px;
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  letter-spacing: 0.03em;
+}
+.code-tab-btn:hover { color: var(--text-bright); }
+.code-tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+.code-tab-panel {
+  display: none;
+  background: #0c0e14;
+  padding: 24px 28px;
+  border-left: 3px solid var(--cyan);
+  overflow-x: auto;
+}
+.code-tab-panel.active { display: block; }
+.code-tab-panel.amber  { border-left-color: var(--amber); }
+.code-tab-panel.green  { border-left-color: var(--green); }
+.code-tab-panel.purple { border-left-color: var(--purple); }
+.code-tab-panel.red    { border-left-color: var(--red); }
+
+.code-tab-panel pre {
+  font-family: 'D2Coding', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre;
+  margin: 0;
+}
+
+.kw { color: #7dd3fc; }   /* keyword */
+.fn { color: #fbbf24; }   /* function */
+.st { color: #86efac; }   /* string */
+.cm { color: #6b7280; }   /* comment */
+.tp { color: #f9a8d4; }   /* type */
+.an { color: var(--amber); } /* annotation */
+.num { color: #c4b5fd; }  /* number */
+
+/* ─── BEST PRACTICE CARDS ─── */
+.bp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.bp-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px 24px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  transition: border-color 0.2s;
+}
+.bp-card:hover { border-color: var(--cyan); }
+
+.bp-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.bp-body h4 {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+}
+
+.bp-body p {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.65;
+}
+
+/* ─── CLOSER ─── */
+.closer {
+  position: relative;
+  border-radius: 16px;
+  padding: 2px;
+  background: linear-gradient(135deg, var(--cyan), var(--purple));
+  margin-top: 80px;
+}
+
+.closer-inner {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 48px 52px;
+  text-align: center;
+}
+
+.closer-quote {
+  font-family: 'DM Serif Display', serif;
+  font-size: 26px;
+  font-style: italic;
+  color: var(--text-bright);
+  margin-bottom: 24px;
+  line-height: 1.45;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.tag {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  background: var(--surface2);
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 900px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .sim-body { grid-template-columns: 1fr; }
+  .sim-db { border-right: none; border-bottom: 1px solid var(--border); }
+  .exp-grid { grid-template-columns: repeat(2, 1fr); }
+  .compare-grid { grid-template-columns: 1fr; }
+  .bp-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .page-wrap { padding: 0 16px 60px; }
+  .masthead { padding: 48px 0 40px; }
+  .metrics { grid-template-columns: 1fr 1fr; }
+  .exp-grid { grid-template-columns: 1fr; }
+  .closer-inner { padding: 32px 24px; }
+  .sim-buttons { flex-wrap: wrap; }
+  .sim-btn { font-size: 10px; padding: 7px 12px; }
+}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<div class="page-wrap">
+
+  <!-- MASTHEAD -->
+  <div class="masthead">
+    <div class="masthead-tag">Lab 07 — JPA Performance</div>
+    <h1>N+1 문제를
+<em>6가지 방법</em>으로 해결하기</h1>
+    <p class="masthead-sub">JPA에서 가장 빈번한 성능 문제를 재현하고, JOIN FETCH / @EntityGraph / DTO Projection으로 해결하는 내부 동작까지 파고든다.</p>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric-card red">
+      <div class="metric-num">1+N</div>
+      <div class="metric-label">N+1 쿼리 발생</div>
+    </div>
+    <div class="metric-card green">
+      <div class="metric-num">1 SQL</div>
+      <div class="metric-label">JOIN FETCH 해결</div>
+    </div>
+    <div class="metric-card cyan">
+      <div class="metric-num">1:N</div>
+      <div class="metric-label">Team — Member 연관관계</div>
+    </div>
+    <div class="metric-card purple">
+      <div class="metric-num">6</div>
+      <div class="metric-label">실험 수</div>
+    </div>
+  </div>
+
+  <!-- SECTION 01: N+1 발생 메커니즘 -->
+  <section>
+    <div class="sec-label red">Section 01</div>
+    <h2 class="section-title">N+1 발생 메커니즘</h2>
+    <p class="section-desc">LazyProxy는 처음에는 SQL을 실행하지 않는다. 컬렉션에 접근하는 순간 N개의 SELECT가 추가로 실행된다.</p>
+
+    <div class="step-flow">
+      <div class="step-item">
+        <div class="step-badge">01</div>
+        <div class="step-body">
+          <div class="step-title">findAll() 호출 → Team SELECT</div>
+          <div class="step-code">SELECT * FROM team  -- 1개 쿼리</div>
+          <div class="step-note">5개의 Team 엔티티가 로딩된다. members 필드는 LazyProxy로 초기화됨. 아직 SQL 없음.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-badge">02</div>
+        <div class="step-body">
+          <div class="step-title">team[0].members.size() 접근 → 추가 SELECT</div>
+          <div class="step-code">SELECT * FROM member WHERE team_id = 1  -- 2번째 쿼리</div>
+          <div class="step-note">LazyProxy가 초기화되며 PersistenceContext에 Members를 로딩한다.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-badge">03</div>
+        <div class="step-body">
+          <div class="step-title">team[1], team[2], ... 각각 추가 SELECT</div>
+          <div class="step-code">SELECT * FROM member WHERE team_id = 2
+SELECT * FROM member WHERE team_id = 3
+SELECT * FROM member WHERE team_id = 4
+SELECT * FROM member WHERE team_id = 5</div>
+          <div class="step-note">Team 수(N=5)만큼 SELECT가 반복 실행된다.</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-badge">04</div>
+        <div class="step-body">
+          <div class="step-title">총 쿼리: 1 + N = 1 + 5 = 6 SQL</div>
+          <div class="step-note">Team이 100개라면 101 SQL. 1000개라면 1001 SQL. N이 커질수록 선형으로 증가한다.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout danger">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-text">
+        <strong>EAGER로 바꾸면 해결되는가?</strong><br>
+        아닙니다. JPQL 사용 시 EAGER여도 추가 SELECT로 로딩합니다. Spring Data JPA의 <code>findAll()</code>은 내부적으로 JPQL을 사용하기 때문에, FetchType.EAGER 설정이 N+1을 막지 못합니다. Hibernate는 JPQL 결과를 먼저 받은 뒤, EAGER 연관관계를 별도 SELECT로 즉시 로딩합니다.
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 02: INTERACTIVE SIMULATOR -->
+  <section>
+    <div class="sec-label cyan">Section 02</div>
+    <h2 class="section-title">N+1 쿼리 시뮬레이터</h2>
+    <p class="section-desc">각 시나리오를 클릭해 N+1이 어떻게 발생하고, 어떻게 해결되는지 단계별로 확인하라.</p>
+
+    <div class="simulator">
+      <div class="sim-header">
+        <div class="sim-title">쿼리 실행 시뮬레이터</div>
+        <div class="sim-buttons">
+          <button class="sim-btn" id="btn-lazy" onclick="runScenario('lazy')">LAZY (N+1 발생)</button>
+          <button class="sim-btn" id="btn-fetch" onclick="runScenario('fetch')">JOIN FETCH</button>
+          <button class="sim-btn" id="btn-entity" onclick="runScenario('entity')">@EntityGraph</button>
+          <button class="sim-btn" id="btn-dto" onclick="runScenario('dto')">DTO Projection</button>
+        </div>
+      </div>
+
+      <div class="sim-body">
+        <!-- DB Side -->
+        <div class="sim-db">
+          <div class="sim-section-label">Database</div>
+          <div class="db-tables">
+            <!-- Team Table -->
+            <div class="db-table-wrap">
+              <div class="db-table-title">📋 team</div>
+              <div class="db-row team-row" id="team-1">
+                <span class="col pk">id=1</span>
+                <span>name=<strong>Alpha팀</strong></span>
+              </div>
+              <div class="db-row team-row" id="team-2">
+                <span class="col pk">id=2</span>
+                <span>name=<strong>Beta팀</strong></span>
+              </div>
+              <div class="db-row team-row" id="team-3">
+                <span class="col pk">id=3</span>
+                <span>name=<strong>Gamma팀</strong></span>
+              </div>
+              <div class="db-row team-row" id="team-4">
+                <span class="col pk">id=4</span>
+                <span>name=<strong>Delta팀</strong></span>
+              </div>
+              <div class="db-row team-row" id="team-5">
+                <span class="col pk">id=5</span>
+                <span>name=<strong>Epsilon팀</strong></span>
+              </div>
+            </div>
+            <!-- Member Table -->
+            <div class="db-table-wrap">
+              <div class="db-table-title">👤 member</div>
+              <div class="db-row member-row" id="mem-1-1">
+                <span class="col pk">id=1</span>
+                <span class="col fk">team=1</span>
+                <span>Kim</span>
+              </div>
+              <div class="db-row member-row" id="mem-1-2">
+                <span class="col pk">id=2</span>
+                <span class="col fk">team=1</span>
+                <span>Lee</span>
+              </div>
+              <div class="db-row member-row" id="mem-1-3">
+                <span class="col pk">id=3</span>
+                <span class="col fk">team=1</span>
+                <span>Park</span>
+              </div>
+              <div class="db-row member-row" id="mem-2-1">
+                <span class="col pk">id=4</span>
+                <span class="col fk">team=2</span>
+                <span>Choi</span>
+              </div>
+              <div class="db-row member-row" id="mem-2-2">
+                <span class="col pk">id=5</span>
+                <span class="col fk">team=2</span>
+                <span>Yoon</span>
+              </div>
+              <div class="db-row member-row" id="mem-2-3">
+                <span class="col pk">id=6</span>
+                <span class="col fk">team=2</span>
+                <span>Shin</span>
+              </div>
+              <div class="db-row member-row" id="mem-3-1">
+                <span class="col pk">id=7</span>
+                <span class="col fk">team=3</span>
+                <span>Jang</span>
+              </div>
+              <div class="db-row member-row" id="mem-3-2">
+                <span class="col pk">id=8</span>
+                <span class="col fk">team=3</span>
+                <span>Lim</span>
+              </div>
+              <div class="db-row member-row" id="mem-3-3">
+                <span class="col pk">id=9</span>
+                <span class="col fk">team=3</span>
+                <span>Oh</span>
+              </div>
+              <div class="db-row member-row" id="mem-4-1">
+                <span class="col pk">id=10</span>
+                <span class="col fk">team=4</span>
+                <span>Han</span>
+              </div>
+              <div class="db-row member-row" id="mem-4-2">
+                <span class="col pk">id=11</span>
+                <span class="col fk">team=4</span>
+                <span>Kang</span>
+              </div>
+              <div class="db-row member-row" id="mem-4-3">
+                <span class="col pk">id=12</span>
+                <span class="col fk">team=4</span>
+                <span>Jeong</span>
+              </div>
+              <div class="db-row member-row" id="mem-5-1">
+                <span class="col pk">id=13</span>
+                <span class="col fk">team=5</span>
+                <span>Seo</span>
+              </div>
+              <div class="db-row member-row" id="mem-5-2">
+                <span class="col pk">id=14</span>
+                <span class="col fk">team=5</span>
+                <span>Kwon</span>
+              </div>
+              <div class="db-row member-row" id="mem-5-3">
+                <span class="col pk">id=15</span>
+                <span class="col fk">team=5</span>
+                <span>Son</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Console Side -->
+        <div class="sim-console">
+          <div class="sim-section-label">SQL 실행 로그</div>
+          <div class="terminal" id="terminal">
+            <div class="t-line prompt">-- 시나리오를 선택하세요 --</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Counter -->
+      <div class="sim-counter">
+        <div class="counter-label">
+          <span>쿼리 카운트</span>
+          <span class="counter-num-display" id="counter-num" style="color: var(--dim)">0</span>
+        </div>
+        <div class="counter-bar-track">
+          <div class="counter-bar-fill" id="counter-bar" style="background: var(--dim)"></div>
+        </div>
+        <div class="counter-verdict" id="counter-verdict"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 03: SOLUTION COMPARISON TABLE -->
+  <section>
+    <div class="sec-label green">Section 03</div>
+    <h2 class="section-title">해결 방법 비교</h2>
+    <p class="section-desc">각 방법의 SQL 수, JOIN 타입, 특징을 한눈에 비교한다.</p>
+
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>방법</th>
+          <th>SQL 수</th>
+          <th>JOIN 타입</th>
+          <th>특징</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:var(--text-bright)">LAZY (기본)</strong></td>
+          <td><span class="badge red">1 + N</span></td>
+          <td><span style="color:var(--dim)">—</span></td>
+          <td style="color:var(--red)">N+1 발생, 컬렉션 접근 시 추가 SELECT</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">JOIN FETCH</strong></td>
+          <td><span class="badge green">1</span></td>
+          <td><span class="badge cyan">INNER JOIN</span></td>
+          <td style="color:var(--text)">DISTINCT 필요, members 없는 팀 제외됨</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">@EntityGraph</strong></td>
+          <td><span class="badge green">1</span></td>
+          <td><span class="badge green">LEFT OUTER JOIN</span></td>
+          <td style="color:var(--text)">어노테이션만으로 설정, members 없는 팀도 포함</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">DTO Projection</strong></td>
+          <td><span class="badge green">1</span></td>
+          <td><span class="badge cyan">JOIN</span></td>
+          <td style="color:var(--text)">엔티티 미사용, PersistenceContext 오버헤드 없음</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--text-bright)">@BatchSize</strong></td>
+          <td><span class="badge amber">1 + ⌈N/size⌉</span></td>
+          <td><span style="color:var(--dim)">—</span></td>
+          <td style="color:var(--text)">IN절 배치, 완전한 해결책은 아님</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 04: 6 EXPERIMENT CARDS -->
+  <section>
+    <div class="sec-label purple">Section 04</div>
+    <h2 class="section-title">6가지 실험</h2>
+    <p class="section-desc">각 실험은 N+1의 발생 패턴 또는 해결 방법 하나를 집중적으로 검증한다.</p>
+
+    <div class="exp-grid">
+      <!-- 7-1 -->
+      <div class="exp-card red">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-1</div>
+            <div class="exp-card-title">@OneToMany N+1 발생</div>
+          </div>
+          <span class="badge red">N+1</span>
+        </div>
+        <div class="exp-card-body">
+          <p>Team → Members 컬렉션에 LazyProxy가 적용된 상태에서 findAll() 후 각 팀의 members에 접근한다.</p>
+          <div class="exp-result">⚡ 결과: 1 + 5 = 6 SQL 실행</div>
+        </div>
+      </div>
+
+      <!-- 7-2 -->
+      <div class="exp-card green">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-2</div>
+            <div class="exp-card-title">JOIN FETCH 해결</div>
+          </div>
+          <span class="badge green">INNER JOIN</span>
+        </div>
+        <div class="exp-card-body">
+          <p>JPQL에 JOIN FETCH를 명시하여 Team과 Members를 한 번의 쿼리로 로딩한다. DISTINCT로 중복 제거 필수.</p>
+          <div class="exp-result">✅ 결과: 1 SQL, DISTINCT 적용</div>
+        </div>
+      </div>
+
+      <!-- 7-3 -->
+      <div class="exp-card green">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-3</div>
+            <div class="exp-card-title">@EntityGraph 해결</div>
+          </div>
+          <span class="badge green">LEFT OUTER JOIN</span>
+        </div>
+        <div class="exp-card-body">
+          <p>Repository 메서드에 @EntityGraph를 붙여 자동 LEFT OUTER JOIN. JPQL 수정 없이 어노테이션만으로 적용.</p>
+          <div class="exp-result">✅ 결과: 1 SQL, 어노테이션만으로 완료</div>
+        </div>
+      </div>
+
+      <!-- 7-4 -->
+      <div class="exp-card amber">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-4</div>
+            <div class="exp-card-title">@ManyToOne N+1 (캐시)</div>
+          </div>
+          <span class="badge amber">1차 캐시</span>
+        </div>
+        <div class="exp-card-body">
+          <p>Member → Team 방향의 N+1. 동일 트랜잭션 내에서는 PersistenceContext 1차 캐시에 의해 Team이 재사용된다.</p>
+          <div class="exp-result">⚡ 결과: 중복 Team은 캐시 재사용</div>
+        </div>
+      </div>
+
+      <!-- 7-5 -->
+      <div class="exp-card green">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-5</div>
+            <div class="exp-card-title">DTO Projection</div>
+          </div>
+          <span class="badge green">PC 없음</span>
+        </div>
+        <div class="exp-card-body">
+          <p>JPQL에서 new DTO(...)로 직접 값만 조회. PersistenceContext에 엔티티를 올리지 않아 메모리 오버헤드가 없다.</p>
+          <div class="exp-result">✅ 결과: 1 SQL, PC 오버헤드 없음</div>
+        </div>
+      </div>
+
+      <!-- 7-6 -->
+      <div class="exp-card red">
+        <div class="exp-card-header">
+          <div>
+            <div class="exp-card-num">실험 7-6</div>
+            <div class="exp-card-title">MultipleBagFetchException</div>
+          </div>
+          <span class="badge red">예외 발생</span>
+        </div>
+        <div class="exp-card-body">
+          <p>두 개의 List 타입 컬렉션을 동시에 JOIN FETCH 시 Hibernate가 MultipleBagFetchException을 던진다. Set 또는 순차 fetch로 해결.</p>
+          <div class="exp-result">⚠️ 결과: 예외 → Set 변환 또는 순차 fetch</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 05: JOIN FETCH vs @EntityGraph -->
+  <section>
+    <div class="sec-label cyan">Section 05</div>
+    <h2 class="section-title">JOIN FETCH vs @EntityGraph</h2>
+    <p class="section-desc">같은 결과처럼 보이지만, JOIN 타입과 엔티티 포함 여부에서 중요한 차이가 있다.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card cyan">
+        <div class="compare-card-header">
+          <h3>JOIN FETCH</h3>
+          <p>JPQL에 직접 명시하는 방식</p>
+        </div>
+        <div class="compare-card-body">
+          <div class="compare-row">
+            <span class="label">JOIN 타입</span>
+            <span class="value"><span class="badge cyan">INNER JOIN</span></span>
+          </div>
+          <div class="compare-row">
+            <span class="label">적용 방식</span>
+            <span class="value">JPQL 직접 수정</span>
+          </div>
+          <div class="compare-row">
+            <span class="label">members 없는 팀</span>
+            <span class="value" style="color:var(--red)">결과에서 제외됨</span>
+          </div>
+          <div class="compare-row">
+            <span class="label">중복 처리</span>
+            <span class="value">DISTINCT 명시 필요</span>
+          </div>
+          <div class="compare-row">
+            <span class="label">커스텀 가능</span>
+            <span class="value">WHERE, ORDER BY 자유롭게</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-card green">
+        <div class="compare-card-header">
+          <h3>@EntityGraph</h3>
+          <p>어노테이션으로 fetch plan 지정</p>
+        </div>
+        <div class="compare-card-body">
+          <div class="compare-row">
+            <span class="label">JOIN 타입</span>
+            <span class="value"><span class="badge green">LEFT OUTER JOIN</span></span>
+          </div>
+          <div class="compare-row">
+            <span class="label">적용 방식</span>
+            <span class="value">메서드 어노테이션만</span>
+          </div>
+          <div class="compare-row">
+            <span class="label">members 없는 팀</span>
+            <span class="value" style="color:var(--green)">결과에 포함됨</span>
+          </div>
+          <div class="compare-row">
+            <span class="label">중복 처리</span>
+            <span class="value">Spring Data가 처리</span>
+          </div>
+          <div class="compare-row">
+            <span class="label">커스텀 가능</span>
+            <span class="value">제한적 (Spec 조합 가능)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 06: CODE TABS -->
+  <section>
+    <div class="sec-label amber">Section 06</div>
+    <h2 class="section-title">코드 예제</h2>
+    <p class="section-desc">각 해결 방법의 실제 구현 코드. Kotlin + Spring Data JPA 기준.</p>
+
+    <div class="code-tabs">
+      <div class="code-tab-bar">
+        <button class="code-tab-btn active" onclick="switchTab(this, 'tab-entity')">Entity 설정</button>
+        <button class="code-tab-btn" onclick="switchTab(this, 'tab-lazy')">N+1 발생 코드</button>
+        <button class="code-tab-btn" onclick="switchTab(this, 'tab-fetch')">JOIN FETCH</button>
+        <button class="code-tab-btn" onclick="switchTab(this, 'tab-graph')">@EntityGraph</button>
+        <button class="code-tab-btn" onclick="switchTab(this, 'tab-dto')">DTO Projection</button>
+        <button class="code-tab-btn" onclick="switchTab(this, 'tab-batch')">@BatchSize</button>
+      </div>
+
+      <div class="code-tab-panel active" id="tab-entity">
+        <pre><span class="an">@Entity</span>
+<span class="kw">class</span> <span class="tp">Team</span>(
+    <span class="an">@Id</span> <span class="an">@GeneratedValue</span>(strategy = GenerationType.IDENTITY)
+    <span class="kw">val</span> id: <span class="tp">Long</span> = <span class="num">0</span>,
+
+    <span class="kw">val</span> name: <span class="tp">String</span>,
+
+    <span class="cm">// LAZY 로딩 (기본값, 명시 권장)</span>
+    <span class="an">@OneToMany</span>(mappedBy = <span class="st">"team"</span>, fetch = FetchType.LAZY)
+    <span class="kw">val</span> members: <span class="tp">MutableList</span>&lt;<span class="tp">Member</span>&gt; = mutableListOf()
+)
+
+<span class="an">@Entity</span>
+<span class="kw">class</span> <span class="tp">Member</span>(
+    <span class="an">@Id</span> <span class="an">@GeneratedValue</span>(strategy = GenerationType.IDENTITY)
+    <span class="kw">val</span> id: <span class="tp">Long</span> = <span class="num">0</span>,
+
+    <span class="kw">val</span> name: <span class="tp">String</span>,
+    <span class="kw">val</span> role: <span class="tp">String</span>,
+
+    <span class="cm">// ManyToOne도 기본은 EAGER이므로 LAZY로 명시</span>
+    <span class="an">@ManyToOne</span>(fetch = FetchType.LAZY)
+    <span class="an">@JoinColumn</span>(name = <span class="st">"team_id"</span>)
+    <span class="kw">val</span> team: <span class="tp">Team</span>
+)</pre>
+      </div>
+
+      <div class="code-tab-panel amber" id="tab-lazy">
+        <pre><span class="cm">// N+1이 발생하는 코드</span>
+<span class="an">@Service</span>
+<span class="kw">class</span> <span class="tp">NplusOneExperimentService</span>(
+    <span class="kw">private val</span> teamRepository: <span class="tp">TeamRepository</span>
+) {
+    <span class="an">@Transactional</span>(readOnly = <span class="kw">true</span>)
+    <span class="kw">fun</span> <span class="fn">experimentNplusOne</span>(): <span class="tp">List</span>&lt;<span class="tp">TeamResult</span>&gt; {
+        <span class="cm">// SELECT * FROM team → 1 쿼리</span>
+        <span class="kw">val</span> teams = teamRepository.<span class="fn">findAll</span>()
+
+        <span class="cm">// 각 팀의 members에 접근할 때마다 추가 SELECT → N 쿼리!</span>
+        <span class="kw">return</span> teams.<span class="fn">map</span> { team -&gt;
+            <span class="tp">TeamResult</span>(
+                teamName = team.name,
+                memberCount = team.members.<span class="fn">size</span>,  <span class="cm">// HERE: LazyProxy 초기화</span>
+                members = team.members.<span class="fn">map</span> { it.name }
+            )
+        }
+        <span class="cm">// 총 SQL: 1 + N (teams.size)</span>
+    }
+}</pre>
+      </div>
+
+      <div class="code-tab-panel" id="tab-fetch">
+        <pre><span class="cm">// JOIN FETCH로 한 번에 해결</span>
+<span class="an">@Repository</span>
+<span class="kw">interface</span> <span class="tp">TeamRepository</span> : <span class="tp">JpaRepository</span>&lt;<span class="tp">Team</span>, <span class="tp">Long</span>&gt; {
+
+    <span class="cm">// DISTINCT: JOIN 결과 중복 제거 (Hibernate 6+에서는 자동)</span>
+    <span class="an">@Query</span>(<span class="st">"""
+        SELECT DISTINCT t FROM Team t
+        JOIN FETCH t.members
+    """</span>)
+    <span class="kw">fun</span> <span class="fn">findAllWithMembersJoinFetch</span>(): <span class="tp">List</span>&lt;<span class="tp">Team</span>&gt;
+}
+
+<span class="cm">// 서비스에서 사용</span>
+<span class="an">@Transactional</span>(readOnly = <span class="kw">true</span>)
+<span class="kw">fun</span> <span class="fn">experimentJoinFetch</span>(): <span class="tp">List</span>&lt;<span class="tp">TeamResult</span>&gt; {
+    <span class="cm">// SELECT DISTINCT t.*, m.* FROM team t INNER JOIN member m ON t.id=m.team_id</span>
+    <span class="kw">val</span> teams = teamRepository.<span class="fn">findAllWithMembersJoinFetch</span>()
+    <span class="cm">// 총 SQL: 1 (members는 이미 로딩됨, LazyProxy 초기화 없음)</span>
+    <span class="kw">return</span> teams.<span class="fn">map</span> { team -&gt;
+        <span class="tp">TeamResult</span>(team.name, team.members.<span class="fn">size</span>, team.members.<span class="fn">map</span> { it.name })
+    }
+}</pre>
+      </div>
+
+      <div class="code-tab-panel green" id="tab-graph">
+        <pre><span class="cm">// @EntityGraph: 어노테이션만으로 LEFT OUTER JOIN 적용</span>
+<span class="an">@Repository</span>
+<span class="kw">interface</span> <span class="tp">TeamRepository</span> : <span class="tp">JpaRepository</span>&lt;<span class="tp">Team</span>, <span class="tp">Long</span>&gt; {
+
+    <span class="cm">// attributePaths에 지정한 연관관계를 eager로 fetch</span>
+    <span class="an">@EntityGraph</span>(attributePaths = [<span class="st">"members"</span>])
+    <span class="kw">override fun</span> <span class="fn">findAll</span>(): <span class="tp">List</span>&lt;<span class="tp">Team</span>&gt;
+
+    <span class="cm">// 특정 조건과 함께 사용 가능</span>
+    <span class="an">@EntityGraph</span>(attributePaths = [<span class="st">"members"</span>])
+    <span class="kw">fun</span> <span class="fn">findByName</span>(name: <span class="tp">String</span>): <span class="tp">Optional</span>&lt;<span class="tp">Team</span>&gt;
+}
+
+<span class="cm">// JOIN FETCH와의 차이: LEFT OUTER JOIN → members 없는 팀도 포함</span>
+<span class="cm">// 생성된 SQL:</span>
+<span class="cm">// SELECT t.*, m.* FROM team t LEFT OUTER JOIN member m ON t.id = m.team_id</span></pre>
+      </div>
+
+      <div class="code-tab-panel purple" id="tab-dto">
+        <pre><span class="cm">// DTO Projection: PersistenceContext 없이 값만 조회</span>
+<span class="kw">data class</span> <span class="tp">TeamMemberDto</span>(
+    <span class="kw">val</span> teamName: <span class="tp">String</span>,
+    <span class="kw">val</span> memberName: <span class="tp">String</span>,
+    <span class="kw">val</span> memberRole: <span class="tp">String</span>
+)
+
+<span class="an">@Repository</span>
+<span class="kw">interface</span> <span class="tp">TeamRepository</span> : <span class="tp">JpaRepository</span>&lt;<span class="tp">Team</span>, <span class="tp">Long</span>&gt; {
+
+    <span class="an">@Query</span>(<span class="st">"""
+        SELECT new com.example.dto.TeamMemberDto(
+            t.name, m.name, m.role
+        )
+        FROM Team t JOIN t.members m
+    """</span>)
+    <span class="kw">fun</span> <span class="fn">findAllTeamMembersAsDto</span>(): <span class="tp">List</span>&lt;<span class="tp">TeamMemberDto</span>&gt;
+}
+
+<span class="cm">// 장점: 엔티티를 PersistenceContext에 올리지 않음</span>
+<span class="cm">// → 변경 감지(dirty checking) 오버헤드 없음</span>
+<span class="cm">// → 읽기 전용 조회에 최적화</span>
+<span class="cm">// 단점: 엔티티 조작 불가 (업데이트, 연관관계 변경 등)</span></pre>
+      </div>
+
+      <div class="code-tab-panel red" id="tab-batch">
+        <pre><span class="cm">// @BatchSize: IN절 배치로 N+1 완화 (완전한 해결책은 아님)</span>
+<span class="an">@Entity</span>
+<span class="kw">class</span> <span class="tp">Team</span>(
+    ...
+    <span class="an">@BatchSize</span>(size = <span class="num">100</span>)  <span class="cm">// 최대 100개씩 IN절로 묶음</span>
+    <span class="an">@OneToMany</span>(mappedBy = <span class="st">"team"</span>, fetch = FetchType.LAZY)
+    <span class="kw">val</span> members: <span class="tp">MutableList</span>&lt;<span class="tp">Member</span>&gt; = mutableListOf()
+)
+
+<span class="cm">// 또는 application.properties 전역 설정:</span>
+<span class="cm">// spring.jpa.properties.hibernate.default_batch_fetch_size=100</span>
+
+<span class="cm">// 동작: 100개 Team 조회 시 members를 100개씩 IN절로 배치 조회</span>
+<span class="cm">// SELECT * FROM member WHERE team_id IN (1,2,...,100)</span>
+<span class="cm">// N+1 → 1 + ⌈N/100⌉ 으로 개선</span>
+<span class="cm">// 단, 완전한 1 SQL은 아님. JOIN FETCH가 더 효율적</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 07: BEST PRACTICES -->
+  <section>
+    <div class="sec-label green">Section 07</div>
+    <h2 class="section-title">Best Practices</h2>
+    <p class="section-desc">실무에서 검증된 N+1 대응 전략.</p>
+
+    <div class="bp-grid">
+      <div class="bp-card">
+        <div class="bp-icon">⚡</div>
+        <div class="bp-body">
+          <h4>기본 전략: LAZY + 필요 시 JOIN FETCH</h4>
+          <p>모든 연관관계는 FetchType.LAZY로 설정한다. 컬렉션이 필요한 서비스에서만 JOIN FETCH 쿼리를 별도로 작성해 명시적으로 로딩한다. 예측 가능한 SQL 실행을 보장한다.</p>
+        </div>
+      </div>
+      <div class="bp-card">
+        <div class="bp-icon">📦</div>
+        <div class="bp-body">
+          <h4>읽기 전용 API는 DTO Projection 사용</h4>
+          <p>데이터를 화면에 뿌리기만 하는 조회 API는 엔티티 대신 DTO로 직접 조회한다. PersistenceContext 오버헤드를 줄이고 필요한 컬럼만 SELECT해 네트워크 비용도 절약한다.</p>
+        </div>
+      </div>
+      <div class="bp-card">
+        <div class="bp-icon">🔗</div>
+        <div class="bp-body">
+          <h4>복수 컬렉션은 Set 또는 순차 fetch</h4>
+          <p>두 개 이상의 List 컬렉션을 동시에 JOIN FETCH하면 MultipleBagFetchException이 발생한다. 컬렉션 타입을 Set으로 변경하거나, 첫 번째 컬렉션을 JOIN FETCH한 뒤 두 번째는 별도 쿼리로 로딩한다.</p>
+        </div>
+      </div>
+      <div class="bp-card">
+        <div class="bp-icon">🚫</div>
+        <div class="bp-body">
+          <h4>EAGER 절대 금지</h4>
+          <p>FetchType.EAGER는 JPQL 사용 시에도 N+1을 막지 못한다. 연관 데이터가 필요 없는 상황에서도 항상 JOIN하므로 불필요한 데이터 로딩이 발생한다. 코드베이스에서 EAGER를 완전히 제거한다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSER -->
+  <div class="closer">
+    <div class="closer-inner">
+      <div class="closer-quote">"FetchType.LAZY + 필요 시 JOIN FETCH가 정답.<br>EAGER는 절대 금지."</div>
+      <p style="font-family:'Noto Sans KR',sans-serif; color:var(--dim); font-size:14px;">N+1은 지식의 문제다. 발생 원인을 이해하면 항상 막을 수 있다.</p>
+      <div class="tag-list">
+        <span class="tag">LAZY 기본</span>
+        <span class="tag">JOIN FETCH 1순위</span>
+        <span class="tag">DTO 읽기전용</span>
+        <span class="tag">EAGER 금지</span>
+        <span class="tag">MultipleBag → Set</span>
+        <span class="tag">@BatchSize 보조</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// SIMULATOR LOGIC
+// ──────────────────────────────────────────────
+
+let animationRunning = false;
+let animationTimeouts = [];
+
+function clearAllTimeouts() {
+  animationTimeouts.forEach(id => clearTimeout(id));
+  animationTimeouts = [];
+}
+
+function delay(ms) {
+  return new Promise(resolve => {
+    const id = setTimeout(resolve, ms);
+    animationTimeouts.push(id);
+  });
+}
+
+// Reset all DB rows to default state
+function resetDbRows() {
+  const allRows = document.querySelectorAll('.db-row');
+  allRows.forEach(row => {
+    row.classList.remove('queried-team', 'queried-member', 'dimmed', 'partial-highlight');
+  });
+}
+
+// Set all rows to dimmed
+function dimAllRows() {
+  const allRows = document.querySelectorAll('.db-row');
+  allRows.forEach(row => row.classList.add('dimmed'));
+}
+
+// Light up specific rows
+function lightUp(ids, cls) {
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('dimmed');
+      el.classList.add(cls);
+    }
+  });
+}
+
+// Reset terminal
+function clearTerminal() {
+  document.getElementById('terminal').innerHTML = '';
+}
+
+// Add terminal line with delay (async)
+async function tLine(text, cls, delayMs = 0) {
+  if (delayMs > 0) await delay(delayMs);
+  const terminal = document.getElementById('terminal');
+  const line = document.createElement('div');
+  line.className = `t-line ${cls}`;
+  line.textContent = text;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+// Update counter
+function setCounter(count, max, color, verdict, verdictColor) {
+  const num = document.getElementById('counter-num');
+  const bar = document.getElementById('counter-bar');
+  const v = document.getElementById('counter-verdict');
+
+  num.textContent = count;
+  num.style.color = color;
+
+  const pct = Math.min((count / max) * 100, 100);
+  bar.style.width = pct + '%';
+  bar.style.background = color;
+
+  if (verdict) {
+    v.textContent = verdict;
+    v.style.color = verdictColor;
+  } else {
+    v.textContent = '';
+  }
+}
+
+// Set all button states
+function setActiveBtn(activeId, cls) {
+  ['btn-lazy','btn-fetch','btn-entity','btn-dto'].forEach(id => {
+    const btn = document.getElementById(id);
+    btn.className = 'sim-btn';
+  });
+  if (activeId) {
+    document.getElementById(activeId).classList.add('active-' + cls);
+  }
+}
+
+// ── SCENARIO: LAZY (N+1) ──
+async function runLazy() {
+  setActiveBtn('btn-lazy', 'red');
+  clearTerminal();
+  resetDbRows();
+  setCounter(0, 6, 'var(--dim)', '', '');
+
+  await tLine('-- 시나리오: FetchType.LAZY (N+1 발생) --', 'prompt', 0);
+  await tLine('', 'blank', 200);
+
+  // Step 1: SELECT team
+  await tLine('▶ findAll() 호출', 'prompt', 300);
+  await tLine('SELECT * FROM team', 'sql', 400);
+
+  dimAllRows();
+  lightUp(['team-1','team-2','team-3','team-4','team-5'], 'queried-team');
+  setCounter(1, 6, 'var(--cyan)', '', '');
+
+  await tLine('→ 5개 Team 로딩 (members: LazyProxy)', 'note', 400);
+  await tLine('', 'blank', 0);
+
+  // N+1 loop
+  const teams = ['Alpha팀','Beta팀','Gamma팀','Delta팀','Epsilon팀'];
+  const memberGroups = [
+    ['mem-1-1','mem-1-2','mem-1-3'],
+    ['mem-2-1','mem-2-2','mem-2-3'],
+    ['mem-3-1','mem-3-2','mem-3-3'],
+    ['mem-4-1','mem-4-2','mem-4-3'],
+    ['mem-5-1','mem-5-2','mem-5-3'],
+  ];
+
+  for (let i = 0; i < 5; i++) {
+    await tLine(`▶ team[${i}](${teams[i]}).members 접근 → LazyProxy 초기화`, 'prompt', 500);
+    await tLine(`SELECT * FROM member WHERE team_id = ${i+1}`, 'sql-member', 300);
+    lightUp(memberGroups[i], 'queried-member');
+    setCounter(i + 2, 6, 'var(--red)', '', '');
+    await tLine(`→ ${teams[i]} 멤버 3명 로딩`, 'note', 300);
+    await tLine('', 'blank', 0);
+  }
+
+  setCounter(6, 6, 'var(--red)', '⚡ 6 SQL 실행! (1 + N=5) — N+1 문제 발생!', 'var(--red)');
+  await tLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'prompt', 200);
+  await tLine('⚠  총 SQL: 1 + 5 = 6  (Team 100개면 101 SQL!)', 'warn', 100);
+}
+
+// ── SCENARIO: JOIN FETCH ──
+async function runFetch() {
+  setActiveBtn('btn-fetch', 'green');
+  clearTerminal();
+  resetDbRows();
+  setCounter(0, 1, 'var(--dim)', '', '');
+
+  await tLine('-- 시나리오: JOIN FETCH (1 SQL 해결) --', 'prompt', 0);
+  await tLine('', 'blank', 200);
+
+  await tLine('▶ findAllWithMembersJoinFetch() 호출', 'prompt', 300);
+  await delay(400);
+  await tLine('SELECT DISTINCT t.*, m.*', 'sql', 0);
+  await tLine('FROM   team t', 'sql', 80);
+  await tLine('INNER  JOIN member m ON t.id = m.team_id', 'sql', 80);
+
+  await delay(400);
+
+  // All rows light up simultaneously
+  dimAllRows();
+  await delay(100);
+  lightUp(['team-1','team-2','team-3','team-4','team-5'], 'queried-team');
+  lightUp([
+    'mem-1-1','mem-1-2','mem-1-3',
+    'mem-2-1','mem-2-2','mem-2-3',
+    'mem-3-1','mem-3-2','mem-3-3',
+    'mem-4-1','mem-4-2','mem-4-3',
+    'mem-5-1','mem-5-2','mem-5-3',
+  ], 'queried-member');
+
+  setCounter(1, 1, 'var(--green)', '', '');
+
+  await tLine('→ Team 5개 + Member 15개 동시 로딩', 'note', 400);
+  await tLine('→ DISTINCT로 Team 중복 제거', 'note', 200);
+  await tLine('', 'blank', 0);
+
+  setCounter(1, 1, 'var(--green)', '✅ 1 SQL — JOIN FETCH로 한 번에 해결!', 'var(--green)');
+  await tLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'prompt', 200);
+  await tLine('✓  총 SQL: 1  (N이 아무리 커도 항상 1 SQL)', 'note', 100);
+}
+
+// ── SCENARIO: @EntityGraph ──
+async function runEntity() {
+  setActiveBtn('btn-entity', 'cyan');
+  clearTerminal();
+  resetDbRows();
+  setCounter(0, 1, 'var(--dim)', '', '');
+
+  await tLine('-- 시나리오: @EntityGraph (LEFT OUTER JOIN) --', 'prompt', 0);
+  await tLine('', 'blank', 200);
+
+  await tLine('▶ @EntityGraph(attributePaths=["members"]) findAll()', 'prompt', 300);
+  await delay(400);
+  await tLine('SELECT t.*, m.*', 'sql', 0);
+  await tLine('FROM   team t', 'sql', 80);
+  await tLine('LEFT   OUTER JOIN member m ON t.id = m.team_id', 'sql', 80);
+
+  await delay(400);
+
+  dimAllRows();
+  await delay(100);
+  lightUp(['team-1','team-2','team-3','team-4','team-5'], 'queried-team');
+  lightUp([
+    'mem-1-1','mem-1-2','mem-1-3',
+    'mem-2-1','mem-2-2','mem-2-3',
+    'mem-3-1','mem-3-2','mem-3-3',
+    'mem-4-1','mem-4-2','mem-4-3',
+    'mem-5-1','mem-5-2','mem-5-3',
+  ], 'queried-member');
+
+  setCounter(1, 1, 'var(--cyan)', '', '');
+
+  await tLine('→ LEFT OUTER JOIN: members 없는 Team도 포함', 'note', 400);
+  await tLine('→ JPQL 수정 없이 어노테이션만으로 적용', 'info', 200);
+  await tLine('', 'blank', 0);
+
+  setCounter(1, 1, 'var(--cyan)', '✅ 1 SQL — @EntityGraph로 어노테이션만으로 해결!', 'var(--cyan)');
+  await tLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'prompt', 200);
+  await tLine('✓  JOIN FETCH와 달리 LEFT OUTER JOIN 사용', 'note', 100);
+}
+
+// ── SCENARIO: DTO PROJECTION ──
+async function runDto() {
+  setActiveBtn('btn-dto', 'purple');
+  clearTerminal();
+  resetDbRows();
+  setCounter(0, 1, 'var(--dim)', '', '');
+
+  await tLine('-- 시나리오: DTO Projection (필요한 컬럼만) --', 'prompt', 0);
+  await tLine('', 'blank', 200);
+
+  await tLine('▶ findAllTeamMembersAsDto() 호출', 'prompt', 300);
+  await delay(400);
+  await tLine('SELECT t.name, m.name, m.role', 'sql', 0);
+  await tLine('FROM   team t JOIN member m ON t.id = m.team_id', 'sql', 80);
+
+  await delay(400);
+
+  // Only highlight name/role columns - partial highlight
+  dimAllRows();
+  await delay(100);
+
+  // All rows show but as partial highlight (only selected columns)
+  ['team-1','team-2','team-3','team-4','team-5'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('dimmed');
+      el.classList.add('partial-highlight');
+    }
+  });
+
+  [
+    'mem-1-1','mem-1-2','mem-1-3',
+    'mem-2-1','mem-2-2','mem-2-3',
+    'mem-3-1','mem-3-2','mem-3-3',
+    'mem-4-1','mem-4-2','mem-4-3',
+    'mem-5-1','mem-5-2','mem-5-3',
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('dimmed');
+      el.classList.add('partial-highlight');
+    }
+  });
+
+  setCounter(1, 1, 'var(--purple)', '', '');
+
+  await tLine('→ name, role 컬럼만 SELECT', 'note', 400);
+  await tLine('→ 엔티티 미생성 → PersistenceContext에 올리지 않음', 'info', 200);
+  await tLine('→ Dirty Checking 오버헤드 없음', 'info', 100);
+  await tLine('', 'blank', 0);
+
+  setCounter(1, 1, 'var(--purple)', '✅ 1 SQL — DTO로 필요한 컬럼만, PC 오버헤드 없음!', 'var(--purple)');
+  await tLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'prompt', 200);
+  await tLine('✓  읽기 전용 조회에 최적화된 방법', 'note', 100);
+}
+
+// Main dispatcher
+function runScenario(name) {
+  if (animationRunning) {
+    clearAllTimeouts();
+    animationRunning = false;
+  }
+
+  animationRunning = true;
+
+  let p;
+  if (name === 'lazy')   p = runLazy();
+  if (name === 'fetch')  p = runFetch();
+  if (name === 'entity') p = runEntity();
+  if (name === 'dto')    p = runDto();
+
+  p.then(() => { animationRunning = false; });
+}
+
+// ──────────────────────────────────────────────
+// CODE TABS
+// ──────────────────────────────────────────────
+function switchTab(btn, panelId) {
+  document.querySelectorAll('.code-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.code-tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+</script>
+</body>
+</html>

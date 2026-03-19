@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 00: Count Query 최적화</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #08090e;
+    --surface: #11131a;
+    --surface2: #191c27;
+    --surface3: #222638;
+    --border: #2a2f42;
+    --text: #c8cdd8;
+    --text-bright: #eef0f6;
+    --dim: #9ca3b0;
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.12);
+    --amber: #ffb800;
+    --amber-dim: rgba(255,184,0,0.12);
+    --red: #ff4d6a;
+    --red-dim: rgba(255,77,106,0.10);
+    --green: #00e68a;
+    --green-dim: rgba(0,230,138,0.10);
+    --purple: #a78bfa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--void);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  code, .mono { font-family: 'D2Coding', monospace; font-size: 0.88em; }
+
+  /* ── Ambient Background ── */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 10%, rgba(0,212,255,0.06), transparent),
+      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(255,184,0,0.04), transparent),
+      radial-gradient(ellipse 40% 30% at 50% 50%, rgba(167,139,250,0.03), transparent);
+  }
+
+  .page-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 28px 80px;
+  }
+
+  /* ── Masthead ── */
+  .masthead {
+    padding: 80px 0 60px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 64px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: end;
+  }
+
+  .masthead-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,212,255,0.25);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+  .masthead-tag::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .masthead h1 {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 900;
+    font-size: clamp(40px, 7vw, 72px);
+    line-height: 1.0;
+    letter-spacing: -0.04em;
+    color: var(--text-bright);
+  }
+
+  .masthead h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .masthead-sub {
+    margin-top: 20px;
+    font-size: 17px;
+    color: var(--dim);
+    max-width: 560px;
+    line-height: 1.7;
+  }
+
+  .masthead-stat {
+    text-align: right;
+  }
+
+  .stat-number {
+    font-family: 'DM Serif Display', serif;
+    font-size: 96px;
+    line-height: 1;
+    background: linear-gradient(180deg, var(--amber), #ff8c00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .stat-label {
+    font-family: 'D2Coding', monospace;
+    font-size: 13px;
+    color: var(--amber);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ── Section Titles ── */
+  .section {
+    margin-bottom: 72px;
+  }
+
+  .sec-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 14px;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 999px;
+    font-weight: 700;
+  }
+
+  .section-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+  }
+
+  .section > p {
+    color: var(--dim);
+    font-size: 15px;
+    max-width: 640px;
+    margin-bottom: 28px;
+  }
+
+  /* ── Query Timeline ── */
+  .timeline {
+    position: relative;
+    padding: 32px 0 20px 160px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 140px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .tl-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  .tl-label {
+    position: absolute;
+    left: -160px;
+    width: 130px;
+    text-align: right;
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--dim);
+  }
+
+  .tl-dot {
+    position: absolute;
+    left: -24px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 12px rgba(0,212,255,0.4);
+  }
+
+  .tl-bar {
+    height: 36px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    transition: width 0.8s cubic-bezier(0.22,1,0.36,1);
+  }
+
+  .tl-bar.data {
+    background: linear-gradient(90deg, rgba(0,212,255,0.2), rgba(0,212,255,0.08));
+    border: 1px solid rgba(0,212,255,0.25);
+    color: var(--cyan);
+  }
+
+  .tl-bar.count {
+    background: linear-gradient(90deg, rgba(255,77,106,0.2), rgba(255,77,106,0.08));
+    border: 1px solid rgba(255,77,106,0.25);
+    color: var(--red);
+  }
+
+  .tl-bar.skipped {
+    background: repeating-linear-gradient(90deg, var(--surface2) 0 8px, transparent 8px 16px);
+    border: 1px dashed var(--border);
+    color: var(--dim);
+    font-style: italic;
+  }
+
+  .tl-bar.saved {
+    background: linear-gradient(90deg, rgba(0,230,138,0.15), rgba(0,230,138,0.05));
+    border: 1px solid rgba(0,230,138,0.25);
+    color: var(--green);
+  }
+
+  .tl-total {
+    margin-left: auto;
+    font-family: 'D2Coding', monospace;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* ── Glass Cards ── */
+  .glass {
+    background: rgba(17,19,26,0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+  }
+
+  .glass h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 10px;
+  }
+
+  .glass p {
+    font-size: 14px;
+    color: var(--dim);
+    line-height: 1.65;
+  }
+
+  /* ── Metric Row ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .metric {
+    background: var(--surface);
+    padding: 28px 24px;
+    text-align: center;
+  }
+
+  .metric .m-val {
+    font-family: 'DM Serif Display', serif;
+    font-size: 42px;
+    line-height: 1;
+  }
+
+  .metric .m-unit {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    color: var(--dim);
+    margin-top: 8px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Solution Flow ── */
+  .sol-flow {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    align-items: stretch;
+    margin: 28px 0;
+  }
+
+  .sol-step {
+    position: relative;
+    padding: 24px 16px;
+    text-align: center;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .sol-step:first-child { border-radius: 16px 0 0 16px; }
+  .sol-step:last-child { border-radius: 0 16px 16px 0; }
+
+  .sol-step .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    background: var(--cyan-dim);
+    color: var(--cyan);
+    border: 1px solid rgba(0,212,255,0.2);
+  }
+
+  .sol-step h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+  }
+
+  .sol-step p {
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+
+  .sol-step::after {
+    content: '\276F';
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: #ffffff;
+    z-index: 1;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--void);
+    border-radius: 50%;
+  }
+
+  .sol-step:last-child::after { display: none; }
+
+  .sol-step.highlight {
+    background: var(--green-dim);
+    border-color: rgba(0,230,138,0.2);
+  }
+
+  .sol-step.highlight .step-num {
+    background: var(--green-dim);
+    color: var(--green);
+    border-color: rgba(0,230,138,0.3);
+  }
+
+  /* ── Live Simulator ── */
+  .sim {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+  }
+
+  .sim-console {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .sim-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sim-toolbar .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .sim-toolbar .title {
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    color: var(--dim);
+    margin-left: 8px;
+  }
+
+  .sim-output {
+    padding: 18px;
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    line-height: 1.9;
+    min-height: 280px;
+    max-height: 380px;
+    overflow-y: auto;
+    color: var(--dim);
+  }
+
+  .sim-output::-webkit-scrollbar { width: 4px; }
+  .sim-output::-webkit-scrollbar-track { background: transparent; }
+  .sim-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .sim-output .prompt { color: var(--purple); }
+  .sim-output .ok { color: var(--green); }
+  .sim-output .warn { color: var(--amber); }
+  .sim-output .err { color: var(--red); }
+  .sim-output .info { color: var(--cyan); }
+
+  .sim-controls {
+    display: flex;
+    gap: 6px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .sim-btn {
+    appearance: none;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 150ms;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .sim-btn:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 16px rgba(0,212,255,0.1);
+  }
+
+  .sim-btn.reset {
+    margin-left: auto;
+    color: var(--dim);
+    font-size: 11px;
+  }
+
+  .sim-btn.reset:hover { border-color: var(--red); color: var(--red); }
+
+  .sim-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .sim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    flex: 1;
+  }
+
+  .sim-card .sc-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+  }
+
+  .sim-card .sc-val {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    margin-top: 6px;
+    line-height: 1;
+  }
+
+  .sim-card .sc-sub {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 6px;
+  }
+
+  /* ── Code ── */
+  .code-tabs {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .code-tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .code-tab {
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 14px 24px;
+    font-family: 'D2Coding', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--dim);
+    cursor: pointer;
+    position: relative;
+    transition: color 150ms;
+    border-right: 1px solid var(--border);
+  }
+
+  .code-tab:hover { color: var(--text); }
+
+  .code-tab.active {
+    color: var(--cyan);
+    background: var(--surface);
+  }
+
+  .code-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--cyan);
+  }
+
+  .code-tab .tab-badge {
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-left: 8px;
+    background: var(--cyan-dim);
+    color: var(--cyan);
+    vertical-align: middle;
+  }
+
+  .code-tab-panel {
+    display: none;
+    padding: 24px 28px;
+    font-family: 'D2Coding', monospace;
+    font-size: 13.5px;
+    line-height: 1.85;
+    overflow-x: auto;
+    color: var(--text);
+    white-space: pre;
+    background: #0c0e14;
+    border-left: 3px solid var(--cyan);
+    counter-reset: line;
+  }
+
+  .code-tab-panel.active { display: block; }
+
+  .kw { color: #ff7b72; }
+  .fn { color: #d2a8ff; }
+  .st { color: #a5d6ff; }
+  .cm { color: #484f5b; }
+  .tp { color: #79c0ff; }
+  .an { color: #ffa657; }
+
+  /* ── Caution Cards ── */
+  .caution-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .caution {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    border-left: 3px solid var(--amber);
+  }
+
+  .caution.critical { border-left-color: var(--red); }
+
+  .caution h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .caution h4 .badge {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+  }
+
+  .caution h4 .badge.warn { background: var(--amber-dim); color: var(--amber); }
+  .caution h4 .badge.crit { background: var(--red-dim); color: var(--red); }
+
+  .caution p {
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+
+  /* ── Alternatives ── */
+  .alt-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .alt-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    transition: border-color 200ms, transform 200ms;
+  }
+
+  .alt-card:hover {
+    border-color: rgba(0,212,255,0.3);
+    transform: translateY(-3px);
+  }
+
+  .alt-card .alt-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+  }
+
+  .alt-card p {
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+
+  .alt-card .alt-tags {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .alt-card .alt-tags span {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+  }
+
+  .tag-pro { background: var(--green-dim); color: var(--green); }
+  .tag-con { background: var(--amber-dim); color: var(--amber); }
+
+  /* ── Closer ── */
+  .closer {
+    margin-top: 64px;
+    padding: 40px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(0,230,138,0.04));
+    border: 1px solid rgba(0,212,255,0.12);
+    text-align: center;
+  }
+
+  .closer h2 {
+    font-weight: 900;
+    font-size: 28px;
+    color: var(--text-bright);
+    margin-bottom: 12px;
+  }
+
+  .closer p {
+    font-size: 16px;
+    color: var(--dim);
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  .closer-tags {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .closer-tags span {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .masthead { grid-template-columns: 1fr; gap: 24px; }
+    .masthead-stat { text-align: left; }
+    .stat-number { font-size: 64px; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .sim { grid-template-columns: 1fr; }
+    .code-grid, .alt-grid { grid-template-columns: 1fr; }
+    .sol-flow { grid-template-columns: 1fr; }
+    .sol-step { border-radius: 0; }
+    .sol-step:first-child { border-radius: 16px 16px 0 0; }
+    .sol-step:last-child { border-radius: 0 0 16px 16px; }
+    .sol-step::after { display: none; }
+    .caution-grid { grid-template-columns: 1fr; }
+    .timeline { padding-left: 120px; }
+    .timeline::before { left: 100px; }
+    .tl-label { left: -120px; width: 90px; }
+  }
+
+  @media (max-width: 600px) {
+    .page-wrap { padding: 0 14px 60px; }
+    .masthead { padding: 50px 0 40px; }
+    .timeline { padding-left: 0; }
+    .timeline::before { display: none; }
+    .tl-label { position: static; width: auto; text-align: left; margin-bottom: 4px; }
+    .tl-dot { display: none; }
+    .tl-row { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<div class="page-wrap">
+
+  <!-- ═══ MASTHEAD ═══ -->
+  <header class="masthead">
+    <div>
+      <div class="masthead-tag">Lab 00 &mdash; Query Optimization</div>
+      <h1>COUNT 쿼리를<br>스킵하면 <em>46%</em><br>빨라진다</h1>
+      <p class="masthead-sub">
+        페이징 처리 시 매번 실행되는 COUNT 쿼리를 조건부로 건너뛰어
+        응답 시간을 <span class="mono" style="color:var(--cyan)">0.734s → 0.396s</span>로 단축한 기법.
+        클라이언트가 <code class="mono">totalElements</code>를 보관하고 다음 요청에 전달하는 것이 전부입니다.
+      </p>
+    </div>
+    <div class="masthead-stat">
+      <div class="stat-number">46%</div>
+      <div class="stat-label">response time reduced</div>
+    </div>
+  </header>
+
+  <!-- ═══ METRICS ═══ -->
+  <div class="metrics" style="margin-top: 32px;">
+    <div class="metric">
+      <div class="m-val" style="color:var(--red);">0.734<span style="font-size:20px;">s</span></div>
+      <div class="m-unit">AS-IS (COUNT 포함)</div>
+    </div>
+    <div class="metric">
+      <div class="m-val" style="color:var(--green);">0.396<span style="font-size:20px;">s</span></div>
+      <div class="m-unit">TO-BE (COUNT 스킵)</div>
+    </div>
+    <div class="metric">
+      <div class="m-val" style="color:var(--amber);">0.338<span style="font-size:20px;">s</span></div>
+      <div class="m-unit">절약된 시간 / 요청</div>
+    </div>
+    <div class="metric">
+      <div class="m-val" style="color:var(--cyan);">1M<span style="font-size:20px;">건</span></div>
+      <div class="m-unit">테스트 테이블 크기</div>
+    </div>
+  </div>
+
+  <!-- ═══ PROBLEM ═══ -->
+  <section class="section">
+    <div class="sec-label">01 &mdash; Problem</div>
+    <h2 class="section-title">매 페이지마다 COUNT를 반복한다</h2>
+    <p>일반적인 페이징은 데이터 쿼리와 카운트 쿼리를 동시에 실행합니다.
+       2페이지 이후에도 totalElements는 바뀌지 않는데, COUNT는 매번 0.3초를 낭비합니다.</p>
+
+    <div class="timeline">
+      <div class="tl-row">
+        <span class="tl-label" style="color:var(--text-bright);">PAGE 1</span>
+        <span class="tl-dot"></span>
+        <div class="tl-bar data" style="width:240px;">SELECT * ... LIMIT 20 &nbsp;(0.4s)</div>
+        <div class="tl-bar count" style="width:180px;">SELECT COUNT(*) &nbsp;(0.3s)</div>
+        <span class="tl-total" style="color:var(--red);">0.734s</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-label" style="color:var(--text-bright);">PAGE 2</span>
+        <span class="tl-dot" style="background:var(--red);box-shadow:0 0 12px rgba(255,77,106,0.4);"></span>
+        <div class="tl-bar data" style="width:240px;">SELECT * ... LIMIT 20 &nbsp;(0.4s)</div>
+        <div class="tl-bar count" style="width:180px;">SELECT COUNT(*) &nbsp;(0.3s)</div>
+        <span class="tl-total" style="color:var(--red);">0.734s</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-label" style="color:var(--text-bright);">PAGE 3</span>
+        <span class="tl-dot" style="background:var(--red);box-shadow:0 0 12px rgba(255,77,106,0.4);"></span>
+        <div class="tl-bar data" style="width:240px;">SELECT * ... LIMIT 20 &nbsp;(0.4s)</div>
+        <div class="tl-bar count" style="width:180px;">SELECT COUNT(*) &nbsp;(0.3s)</div>
+        <span class="tl-total" style="color:var(--red);">0.734s</span>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--red);text-align:center;margin-top:8px;font-weight:600;">
+      ↑ 2페이지 이후 COUNT는 동일한 결과(400,254)를 반복 계산 &mdash; 순수 낭비
+    </p>
+  </section>
+
+  <!-- ═══ SOLUTION ═══ -->
+  <section class="section">
+    <div class="sec-label">02 &mdash; Solution</div>
+    <h2 class="section-title">클라이언트가 totalElements를 돌려보낸다</h2>
+    <p>첫 페이지에서 받은 totalElements를 클라이언트가 보관하고, 다음 요청의 파라미터로 전달하면 서버는 COUNT 쿼리를 건너뜁니다.</p>
+
+    <div class="sol-flow">
+      <div class="sol-step">
+        <div class="step-num">1</div>
+        <h4>첫 페이지 요청</h4>
+        <p>totalElements 파라미터 없이 일반 요청</p>
+      </div>
+      <div class="sol-step">
+        <div class="step-num">2</div>
+        <h4>COUNT 실행</h4>
+        <p>서버가 카운트 쿼리로 400,254건 계산</p>
+      </div>
+      <div class="sol-step">
+        <div class="step-num" style="background:var(--amber-dim);color:var(--amber);border-color:rgba(255,184,0,0.2);">3</div>
+        <h4>클라이언트 저장</h4>
+        <p>응답의 totalElements 값을 메모리에 보관</p>
+      </div>
+      <div class="sol-step">
+        <div class="step-num">4</div>
+        <h4>다음 페이지 전달</h4>
+        <p>totalElements= 400254 파라미터 추가</p>
+      </div>
+      <div class="sol-step highlight">
+        <div class="step-num">5</div>
+        <h4>COUNT 스킵!</h4>
+        <p>서버가 전달된 값을 그대로 사용</p>
+      </div>
+    </div>
+
+    <!-- TO-BE Timeline -->
+    <div class="timeline" style="margin-top: 24px;">
+      <div class="tl-row">
+        <span class="tl-label" style="color:var(--amber);">PAGE 1</span>
+        <span class="tl-dot" style="background:var(--amber);box-shadow:0 0 12px rgba(255,184,0,0.4);"></span>
+        <div class="tl-bar data" style="width:240px;">DATA QUERY &nbsp;(0.4s)</div>
+        <div class="tl-bar count" style="width:180px;">COUNT QUERY &nbsp;(0.3s)</div>
+        <span class="tl-total" style="color:var(--amber);">0.734s</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-label" style="color:var(--green);">PAGE 2</span>
+        <span class="tl-dot" style="background:var(--green);box-shadow:0 0 12px rgba(0,230,138,0.4);"></span>
+        <div class="tl-bar data" style="width:240px;">DATA QUERY &nbsp;(0.4s)</div>
+        <div class="tl-bar skipped" style="width:180px;">COUNT 스킵</div>
+        <span class="tl-total" style="color:var(--green);">0.396s</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-label" style="color:var(--green);">PAGE 3</span>
+        <span class="tl-dot" style="background:var(--green);box-shadow:0 0 12px rgba(0,230,138,0.4);"></span>
+        <div class="tl-bar data" style="width:240px;">DATA QUERY &nbsp;(0.4s)</div>
+        <div class="tl-bar skipped" style="width:180px;">COUNT 스킵</div>
+        <span class="tl-total" style="color:var(--green);">0.396s</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SIMULATOR ═══ -->
+  <section class="section">
+    <div class="sec-label">03 &mdash; Simulator</div>
+    <h2 class="section-title">직접 체험해보세요</h2>
+    <p>페이지 버튼을 클릭하면 쿼리가 실행되는 과정을 콘솔에서 확인할 수 있습니다.</p>
+
+    <div class="sim">
+      <div class="sim-console">
+        <div class="sim-toolbar">
+          <div class="dot" style="background:#ff5f57;"></div>
+          <div class="dot" style="background:#febc2e;"></div>
+          <div class="dot" style="background:#28c840;"></div>
+          <span class="title">query-optimizer &mdash; simulation</span>
+        </div>
+        <div class="sim-output" id="simOut">
+          <div><span class="prompt">$</span> 페이지 버튼을 클릭하여 시뮬레이션을 시작하세요.</div>
+        </div>
+        <div class="sim-controls">
+          <button class="sim-btn" onclick="simPage(1)">1페이지</button>
+          <button class="sim-btn" onclick="simPage(2)">2페이지</button>
+          <button class="sim-btn" onclick="simPage(3)">3페이지</button>
+          <button class="sim-btn" onclick="simPage(4)">4페이지</button>
+          <button class="sim-btn" onclick="simPage(5)">5페이지</button>
+          <button class="sim-btn reset" onclick="simReset()">reset</button>
+        </div>
+      </div>
+      <div class="sim-sidebar">
+        <div class="sim-card">
+          <div class="sc-label">총 쿼리</div>
+          <div class="sc-val" style="color:var(--cyan);" id="sqTotal">0</div>
+        </div>
+        <div class="sim-card">
+          <div class="sc-label">COUNT 쿼리</div>
+          <div class="sc-val" style="color:var(--red);" id="sqCount">0</div>
+        </div>
+        <div class="sim-card">
+          <div class="sc-label">누적 응답시간</div>
+          <div class="sc-val" style="color:var(--amber);" id="sqTime">0s</div>
+        </div>
+        <div class="sim-card">
+          <div class="sc-label">절약된 시간</div>
+          <div class="sc-val" style="color:var(--green);" id="sqSaved">0s</div>
+          <div class="sc-sub" id="sqSavedPct"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CODE ═══ -->
+  <section class="section">
+    <div class="sec-label">04 &mdash; Implementation</div>
+    <h2 class="section-title">3개 파일, 10줄 수정</h2>
+    <p>구현 난이도가 매우 낮습니다. DTO에 파라미터 추가, Repository에서 조건 분기, Controller에서 수신 &mdash; 끝.</p>
+
+    <div class="code-tabs">
+      <div class="code-tab-bar">
+        <button class="code-tab active" onclick="switchTab(0)">TransactionSearchRequest.kt <span class="tab-badge">DTO</span></button>
+        <button class="code-tab" onclick="switchTab(1)">RepositoryImpl.kt <span class="tab-badge">CORE</span></button>
+        <button class="code-tab" onclick="switchTab(2)">Controller.kt <span class="tab-badge">API</span></button>
+      </div>
+
+      <div class="code-tab-panel active" id="codePanel0"><span class="cm">// TransactionSearchRequest.kt</span>
+<span class="cm">// totalElements 파라미터를 추가하여 카운트 쿼리 필요 여부를 판단한다</span>
+
+<span class="kw">data class</span> <span class="fn">TransactionSearchRequest</span>(
+    <span class="kw">val</span> page: <span class="tp">Int</span> = <span class="st">0</span>,
+    <span class="kw">val</span> size: <span class="tp">Int</span> = <span class="st">20</span>,
+    <span class="kw">val</span> totalElements: <span class="tp">Long?</span> = <span class="kw">null</span>  <span class="cm">// 클라이언트가 전달하는 총 건수</span>
+) {
+    <span class="cm">/**
+     * 카운트 쿼리 필요 여부 판단
+     * - totalElements가 null이면 첫 페이지 → 카운트 필요
+     * - totalElements가 있으면 이후 페이지 → 카운트 불필요
+     */</span>
+    <span class="kw">fun</span> <span class="fn">needsCountQuery</span>(): <span class="tp">Boolean</span> = totalElements == <span class="kw">null</span>
+}</div>
+
+      <div class="code-tab-panel" id="codePanel1"><span class="cm">// TransactionRepositoryImpl.kt</span>
+<span class="cm">// needsCountQuery()에 따라 카운트 쿼리를 실행하거나 클라이언트 값을 재사용한다</span>
+
+<span class="kw">override fun</span> <span class="fn">search</span>(request: <span class="tp">TransactionSearchRequest</span>): <span class="tp">Page</span>&lt;<span class="tp">Transaction</span>&gt; {
+    <span class="kw">val</span> pageable = <span class="fn">PageRequest.of</span>(request.getValidatedPage(), request.getValidatedSize())
+
+    <span class="cm">// 데이터 조회 (항상 실행)</span>
+    <span class="kw">val</span> content = queryFactory
+        .<span class="fn">selectFrom</span>(transaction)
+        .<span class="fn">where</span>(*whereConditions.toTypedArray())
+        .<span class="fn">orderBy</span>(orderSpecifier)
+        .<span class="fn">offset</span>(pageable.offset)
+        .<span class="fn">limit</span>(pageable.pageSize.toLong())
+        .<span class="fn">fetch</span>()
+
+    <span class="cm">// 카운트 쿼리 (조건부 실행!)</span>
+    <span class="kw">val</span> total = <span class="kw">if</span> (request.<span class="fn">needsCountQuery</span>()) {
+        <span class="cm">// 첫 페이지: 카운트 쿼리 실행</span>
+        queryFactory
+            .<span class="fn">select</span>(transaction.<span class="fn">count</span>())
+            .<span class="fn">from</span>(transaction)
+            .<span class="fn">where</span>(*whereConditions.toTypedArray())
+            .<span class="fn">fetchOne</span>() ?: <span class="st">0L</span>
+    } <span class="kw">else</span> {
+        <span class="cm">// 이후 페이지: 클라이언트가 전달한 값 사용</span>
+        request.totalElements!!
+    }
+
+    <span class="kw">return</span> <span class="fn">PageImpl</span>(content, pageable, total)
+}</div>
+
+      <div class="code-tab-panel" id="codePanel2"><span class="cm">// TransactionController.kt</span>
+<span class="cm">// totalElements를 optional 파라미터로 받아 SearchRequest에 전달한다</span>
+
+<span class="an">@GetMapping</span>
+<span class="kw">fun</span> <span class="fn">searchTransactions</span>(
+    <span class="cm">// ... 기존 검색 파라미터들 ...</span>
+    <span class="an">@RequestParam</span>(defaultValue = <span class="st">"0"</span>) page: <span class="tp">Int</span>,
+    <span class="an">@RequestParam</span>(defaultValue = <span class="st">"20"</span>) size: <span class="tp">Int</span>,
+    <span class="an">@RequestParam</span>(required = <span class="kw">false</span>) totalElements: <span class="tp">Long?</span>  <span class="cm">// 추가!</span>
+): <span class="tp">ResponseEntity</span>&lt;<span class="tp">ApiResponse</span>&lt;<span class="tp">PageResponse</span>&lt;<span class="tp">TransactionListResponse</span>&gt;&gt;&gt; {
+
+    <span class="kw">val</span> request = <span class="fn">TransactionSearchRequest</span>(
+        <span class="cm">// ... 기존 파라미터들 ...</span>
+        totalElements = totalElements
+    )
+    <span class="cm">// ...</span>
+}</div>
+    </div>
+  </section>
+
+  <!-- ═══ CAUTIONS ═══ -->
+  <section class="section">
+    <div class="sec-label">05 &mdash; Trade-offs</div>
+    <h2 class="section-title">알아야 할 것들</h2>
+    <p>이 최적화는 트레이드오프가 있습니다. 적용 전에 반드시 이해하세요.</p>
+
+    <div class="caution-grid">
+      <div class="caution critical">
+        <h4><span class="badge crit">필수</span> 검색 조건 변경 시 리셋</h4>
+        <p>검색 조건이 바뀌면 totalElements를 반드시 null로 리셋해야 합니다. 다른 조건의 totalElements를 재사용하면 잘못된 페이지 수가 표시됩니다.</p>
+      </div>
+      <div class="caution">
+        <h4><span class="badge warn">주의</span> 데이터 변경 시 불일치</h4>
+        <p>다른 사용자가 데이터를 추가/삭제하면 클라이언트의 totalElements와 실제 건수가 달라집니다. 대부분 허용 가능한 오차입니다.</p>
+      </div>
+      <div class="caution">
+        <h4><span class="badge warn">주의</span> 마지막 페이지 빈 결과</h4>
+        <p>데이터 삭제 후 기존 페이지 수 기준으로 마지막 페이지를 요청하면 빈 결과가 반환될 수 있습니다. 빈 결과 시 리셋하세요.</p>
+      </div>
+      <div class="caution">
+        <h4><span class="badge warn">별도</span> Deep Pagination은 다른 문제</h4>
+        <p>이 최적화는 COUNT만 스킵합니다. OFFSET이 클 때 데이터 쿼리 자체가 느린 문제는 Cursor 기반 페이징을 검토하세요.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ ALTERNATIVES ═══ -->
+  <section class="section">
+    <div class="sec-label">06 &mdash; Alternatives</div>
+    <h2 class="section-title">다른 접근법</h2>
+
+    <div class="alt-grid">
+      <div class="alt-card">
+        <div class="alt-name">Keyset</div>
+        <p>WHERE id &lt; {lastId} 방식으로 OFFSET 없이 페이징합니다. totalElements 자체가 불필요하지만 "5페이지로 점프"가 불가능합니다.</p>
+        <div class="alt-tags">
+          <span class="tag-pro">빠름</span>
+          <span class="tag-con">점프 불가</span>
+        </div>
+      </div>
+      <div class="alt-card">
+        <div class="alt-name">@Async</div>
+        <p>데이터를 먼저 반환하고 카운트는 비동기로 처리합니다. 체감 응답 시간은 줄지만 서버 부하는 동일합니다.</p>
+        <div class="alt-tags">
+          <span class="tag-pro">UX 개선</span>
+          <span class="tag-con">부하 동일</span>
+        </div>
+      </div>
+      <div class="alt-card">
+        <div class="alt-name">EXPLAIN</div>
+        <p>MySQL EXPLAIN의 rows 값으로 대략적 건수를 추정합니다. 매우 빠르지만 정확도가 낮습니다.</p>
+        <div class="alt-tags">
+          <span class="tag-pro">초고속</span>
+          <span class="tag-con">부정확</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CLOSER ═══ -->
+  <div class="closer">
+    <h2>간단한 구현, 확실한 효과</h2>
+    <p>
+      3개 파일 수정으로 <strong style="color:var(--green);">페이징 성능 46% 개선</strong>.
+      클라이언트가 <code class="mono" style="color:var(--cyan);">totalElements</code>를 보관하고 다음 요청에 전달하면 끝.
+      대부분의 목록 조회 API에 즉시 적용 가능합니다.
+    </p>
+    <div class="closer-tags">
+      <span style="color:var(--green);">구현 난이도: 매우 쉬움</span>
+      <span style="color:var(--amber);">성능 향상: 46%</span>
+      <span style="color:var(--cyan);">클라이언트 협업 필요</span>
+      <span style="color:var(--red);">트레이드오프: 오차 가능</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchTab(idx) {
+    document.querySelectorAll('.code-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+    document.querySelectorAll('.code-tab-panel').forEach((p, i) => p.classList.toggle('active', i === idx));
+  }
+
+  let stored = null, tQ = 0, cQ = 0, tT = 0, sT = 0;
+  const out = document.getElementById('simOut');
+
+  function log(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    out.appendChild(d);
+    out.scrollTop = out.scrollHeight;
+  }
+
+  function simPage(n) {
+    const needsCount = stored === null;
+    tQ++;
+
+    log(`<span class="prompt">$</span> GET /api/v1/transactions?page=${n-1}&size=20` +
+        (stored ? `&totalElements=${stored}` : ''));
+
+    if (needsCount) {
+      cQ++;
+      tT += 0.734;
+      log(`<span class="info">  → SELECT * ... LIMIT 20 OFFSET ${(n-1)*20}</span> <span class="ok">(0.396s)</span>`);
+      log(`<span class="err">  → SELECT COUNT(*) FROM transaction WHERE ...</span> <span class="err">(0.338s)</span>`);
+      stored = 400254;
+      log(`<span class="warn">  → totalElements = 400,254 (저장됨)</span>`);
+      log(`  <span style="color:var(--dim)">총 0.734s</span>`);
+    } else {
+      tT += 0.396;
+      sT += 0.338;
+      log(`<span class="info">  → SELECT * ... LIMIT 20 OFFSET ${(n-1)*20}</span> <span class="ok">(0.396s)</span>`);
+      log(`<span class="ok">  → COUNT 스킵! totalElements=${stored} 재사용</span>`);
+      log(`  <span class="ok">총 0.396s (0.338s 절약)</span>`);
+    }
+    log('');
+
+    document.getElementById('sqTotal').textContent = tQ;
+    document.getElementById('sqCount').textContent = cQ;
+    document.getElementById('sqTime').textContent = tT.toFixed(3) + 's';
+    document.getElementById('sqSaved').textContent = sT.toFixed(3) + 's';
+    const baseline = tQ * 0.734;
+    const pct = baseline > 0 ? ((sT / baseline) * 100).toFixed(0) : 0;
+    document.getElementById('sqSavedPct').textContent =
+        sT > 0 ? `COUNT 없이 ${tQ - cQ}회 실행 (${pct}% 절약)` : '';
+  }
+
+  function simReset() {
+    stored = null; tQ = 0; cQ = 0; tT = 0; sT = 0;
+    out.innerHTML = '<div><span class="prompt">$</span> <span class="ok">시뮬레이터 초기화됨</span></div>';
+    document.getElementById('sqTotal').textContent = '0';
+    document.getElementById('sqCount').textContent = '0';
+    document.getElementById('sqTime').textContent = '0s';
+    document.getElementById('sqSaved').textContent = '0s';
+    document.getElementById('sqSavedPct').textContent = '';
+  }
+</script>
+</body>
+</html>

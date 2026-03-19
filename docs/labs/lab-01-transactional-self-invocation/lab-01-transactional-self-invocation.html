@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 01: @Transactional 자기 호출 함정</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #08090e;
+    --surface: #11131a;
+    --surface2: #191c27;
+    --border: #2a2f42;
+    --text: #c8cdd8;
+    --text-bright: #eef0f6;
+    --dim: #9ca3b0;
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.12);
+    --amber: #ffb800;
+    --amber-dim: rgba(255,184,0,0.12);
+    --red: #ff4d6a;
+    --red-dim: rgba(255,77,106,0.10);
+    --green: #00e68a;
+    --green-dim: rgba(0,230,138,0.10);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    background: var(--void);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  code, .mono { font-family: 'D2Coding', monospace; font-size: 0.88em; }
+  .ambient {
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(ellipse 50% 40% at 25% 8%, rgba(167,139,250,0.07), transparent),
+      radial-gradient(ellipse 50% 50% at 75% 85%, rgba(255,77,106,0.05), transparent);
+  }
+  .page-wrap { position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 28px 80px; }
+
+  /* ── Masthead ── */
+  .masthead { padding:80px 0 60px; border-bottom:1px solid var(--border); margin-bottom:64px; }
+  .masthead-tag {
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--cyan-dim); border:1px solid rgba(0,212,255,0.25); border-radius:999px;
+    padding:5px 14px; font-family:'D2Coding',monospace; font-size:11px;
+    color:var(--cyan); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:28px;
+  }
+  .masthead-tag::before {
+    content:''; width:6px; height:6px; border-radius:50%;
+    background:var(--cyan); box-shadow:0 0 8px var(--cyan);
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .masthead h1 {
+    font-weight:900; font-size:clamp(36px,6.5vw,68px); line-height:1.05; letter-spacing:-0.04em; color:var(--text-bright);
+  }
+  .masthead h1 em {
+    font-style:normal; background:linear-gradient(135deg, var(--red), var(--amber));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .masthead-sub { margin-top:20px; font-size:17px; color:var(--dim); max-width:600px; line-height:1.7; }
+
+  /* ── Sections ── */
+  .section { margin-bottom:72px; }
+  .sec-label {
+    font-family: 'Noto Sans KR', sans-serif; font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--cyan); margin-bottom:14px; display:inline-flex; align-items:center; padding:4px 12px;
+    background:var(--cyan-dim); border:1px solid rgba(0,212,255,0.2); border-radius:999px; font-weight:700;
+  }
+  .section-title { font-family:'Noto Sans KR',sans-serif; font-weight:700; font-size:22px; color:var(--text-bright); margin-bottom:8px; }
+  .section > p { color:var(--dim); font-size:15px; max-width:640px; margin-bottom:28px; }
+
+  /* ── Proxy Diagram ── */
+  .proxy-diagram {
+    display:flex; align-items:center; justify-content:center; gap:0;
+    padding:40px 20px; background:var(--surface); border:1px solid var(--border); border-radius:16px; margin-bottom:24px;
+    flex-wrap:wrap;
+  }
+  .proxy-layer {
+    position:relative; text-align:center; padding:24px 28px; border-radius:14px; min-width:180px;
+  }
+  .proxy-layer .p-label {
+    font-family:'Noto Sans KR',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em;
+    text-transform:uppercase; margin-bottom:6px;
+  }
+  .proxy-layer .p-name { font-size:16px; font-weight:700; color:var(--text-bright); }
+  .proxy-layer .p-detail { font-size:12px; color:var(--dim); margin-top:4px; }
+  .layer-controller { background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.2); }
+  .layer-controller .p-label { color:var(--cyan); }
+  .layer-proxy { background:rgba(167,139,250,0.08); border:2px solid rgba(167,139,250,0.3); }
+  .layer-proxy .p-label { color:var(--purple); }
+  .layer-target { background:rgba(255,184,0,0.08); border:1px solid rgba(255,184,0,0.2); }
+  .layer-target .p-label { color:var(--amber); }
+  .proxy-arrow {
+    font-size:24px; color:#ffffff; margin:0 12px; flex-shrink:0;
+    font-family:'D2Coding',monospace;
+  }
+  .proxy-arrow.blocked { color:var(--red); text-decoration:line-through; }
+
+  /* ── Step Flow ── */
+  .step-flow { display:grid; gap:12px; counter-reset:step; }
+  .step-item {
+    display:grid; grid-template-columns:48px 1fr; gap:16px; align-items:start;
+    padding:18px 20px; background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    transition: border-color 200ms;
+  }
+  .step-item:hover { border-color: rgba(167,139,250,0.3); }
+  .step-item.danger { border-left:3px solid var(--red); background:var(--red-dim); }
+  .step-item.success { border-left:3px solid var(--green); background:var(--green-dim); }
+  .step-num {
+    width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+    font-family:'DM Serif Display',serif; font-size:20px; font-weight:700;
+    background:var(--purple-dim); color:var(--purple); border:1px solid rgba(167,139,250,0.2);
+  }
+  .step-item.danger .step-num { background:var(--red-dim); color:var(--red); border-color:rgba(255,77,106,0.2); }
+  .step-item.success .step-num { background:var(--green-dim); color:var(--green); border-color:rgba(0,230,138,0.2); }
+  .step-body h4 { font-size:15px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+  .step-body p { font-size:13px; color:var(--dim); line-height:1.6; }
+  .step-body code { color:var(--cyan); background:rgba(0,212,255,0.08); padding:1px 6px; border-radius:4px; }
+
+  /* ── Experiment Cards ── */
+  .exp-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .exp-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden;
+  }
+  .exp-header {
+    padding:20px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;
+  }
+  .exp-header .exp-badge {
+    font-family:'Noto Sans KR',sans-serif; font-size:11px; font-weight:700; padding:4px 10px; border-radius:6px;
+  }
+  .exp-header h3 { font-size:16px; font-weight:700; color:var(--text-bright); }
+  .exp-fail .exp-header { background:var(--red-dim); }
+  .exp-fail .exp-badge { background:rgba(255,77,106,0.2); color:var(--red); }
+  .exp-pass .exp-header { background:var(--green-dim); }
+  .exp-pass .exp-badge { background:rgba(0,230,138,0.2); color:var(--green); }
+  .exp-body { padding:24px; }
+  .exp-body p { font-size:14px; color:var(--dim); line-height:1.6; margin-bottom:12px; }
+  .exp-result {
+    padding:16px; border-radius:10px; font-family:'D2Coding',monospace; font-size:13px; line-height:1.7;
+  }
+  .exp-fail .exp-result { background:#1a0a10; border:1px solid rgba(255,77,106,0.2); color:var(--red); }
+  .exp-pass .exp-result { background:#0a1a10; border:1px solid rgba(0,230,138,0.2); color:var(--green); }
+
+  /* ── Sim ── */
+  .sim-panel {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden;
+  }
+  .sim-toolbar {
+    display:flex; align-items:center; gap:8px; padding:12px 18px;
+    background:var(--surface2); border-bottom:1px solid var(--border);
+  }
+  .sim-toolbar .dot { width:10px; height:10px; border-radius:50%; }
+  .sim-toolbar .title { font-family:'D2Coding',monospace; font-size:12px; color:var(--dim); margin-left:8px; }
+  .sim-visual {
+    display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:340px;
+  }
+  .sim-half {
+    padding:28px; border-right:1px solid var(--border);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    cursor:pointer; transition:background 200ms;
+  }
+  .sim-half:last-child { border-right:none; }
+  .sim-half:hover { background:rgba(167,139,250,0.03); }
+  .sim-half.active-self { background:rgba(255,77,106,0.04); }
+  .sim-half.active-ext { background:rgba(0,230,138,0.04); }
+  .sim-half h3 { font-size:15px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+  .sim-half .hint { font-size:12px; color:var(--dim); }
+
+  /* ── Nested proxy visual ── */
+  .proxy-vis {
+    position:relative; width:280px; height:180px; margin:8px 0;
+  }
+  .pv-outer {
+    position:absolute; inset:0; border-radius:18px; border:2px dashed var(--border);
+    display:flex; align-items:center; justify-content:center;
+    transition:border-color 400ms, background 400ms;
+  }
+  .pv-outer-label {
+    position:absolute; top:8px; left:14px; font-size:10px; font-weight:700;
+    letter-spacing:0.08em; text-transform:uppercase; color:var(--dim);
+    transition:color 400ms;
+  }
+  .pv-inner {
+    width:160px; height:100px; border-radius:12px; border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    font-size:13px; font-weight:700; color:var(--dim);
+    transition:border-color 400ms, background 400ms, color 400ms;
+  }
+  .pv-inner span { font-size:10px; font-weight:400; margin-top:4px; }
+  .pv-arrow {
+    position:absolute; font-family:'D2Coding',monospace; font-size:20px; color:#ffffff;
+    transition:color 400ms, opacity 400ms;
+  }
+  .pv-arrow-in { top:50%; left:-30px; transform:translateY(-50%); }
+  .pv-arrow-self { bottom:-28px; left:50%; transform:translateX(-50%); font-size:14px; opacity:0; }
+
+  /* States */
+  .proxy-vis.state-ext .pv-outer {
+    border-color:rgba(167,139,250,0.5); background:rgba(167,139,250,0.05);
+  }
+  .proxy-vis.state-ext .pv-outer-label { color:var(--purple); }
+  .proxy-vis.state-ext .pv-inner {
+    border-color:rgba(0,230,138,0.4); background:rgba(0,230,138,0.05); color:var(--green);
+  }
+  .proxy-vis.state-ext .pv-arrow-in { color:var(--purple); }
+
+  .proxy-vis.state-self .pv-outer { border-color:var(--border); }
+  .proxy-vis.state-self .pv-inner {
+    border-color:rgba(255,77,106,0.4); background:rgba(255,77,106,0.05); color:var(--red);
+  }
+  .proxy-vis.state-self .pv-arrow-in { opacity:0.3; }
+  .proxy-vis.state-self .pv-arrow-self { opacity:1; color:var(--red); }
+
+  .sim-output {
+    padding:18px; font-family:'D2Coding',monospace; font-size:12px; line-height:1.9;
+    border-top:1px solid var(--border); min-height:100px; max-height:200px; overflow-y:auto; color:var(--dim);
+  }
+  .sim-output .ok { color:var(--green); }
+  .sim-output .err { color:var(--red); }
+  .sim-output .info { color:var(--cyan); }
+  .sim-output .warn { color:var(--amber); }
+  .sim-output .pur { color:var(--purple); }
+
+  /* ── Solutions ── */
+  .sol-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .sol-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px;
+    transition:border-color 200ms, transform 200ms;
+  }
+  .sol-card:hover { border-color:rgba(0,212,255,0.3); transform:translateY(-3px); }
+  .sol-card.recommended { border-color:rgba(0,230,138,0.3); border-width:2px; }
+  .sol-card h4 { font-size:14px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+  .sol-card .sol-tag {
+    font-family:'Noto Sans KR',sans-serif; font-size:11px; font-weight:700; padding:3px 8px; border-radius:5px;
+    display:inline-block; margin-bottom:10px;
+  }
+  .sol-card p { font-size:13px; color:var(--dim); line-height:1.6; margin-bottom:8px; }
+  .sol-card .pros { color:var(--green); font-size:12px; }
+  .sol-card .cons { color:var(--red); font-size:12px; }
+
+  /* ── Myth Cards ── */
+  .myth-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .myth-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px;
+    display:grid; grid-template-columns:1fr 1fr; gap:16px;
+  }
+  .myth-side h4 {
+    font-size:12px; font-weight:700; letter-spacing:0.04em; margin-bottom:6px;
+  }
+  .myth-side p { font-size:13px; line-height:1.6; }
+  .myth-wrong h4 { color:var(--red); }
+  .myth-wrong p { color:var(--dim); text-decoration:line-through; text-decoration-color:rgba(255,77,106,0.3); }
+  .myth-right h4 { color:var(--green); }
+  .myth-right p { color:var(--dim); }
+
+  /* ── Code Tabs ── */
+  .code-tabs { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+  .code-tab-bar { display:flex; border-bottom:1px solid var(--border); background:var(--surface2); }
+  .code-tab {
+    appearance:none; background:none; border:none; padding:14px 24px;
+    font-family:'D2Coding',monospace; font-size:13px; font-weight:700; color:var(--dim);
+    cursor:pointer; position:relative; transition:color 150ms; border-right:1px solid var(--border);
+  }
+  .code-tab:hover { color:var(--text); }
+  .code-tab.active { color:var(--purple); background:var(--surface); }
+  .code-tab.active::after {
+    content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:var(--purple);
+  }
+  .code-tab-panel {
+    display:none; padding:24px 28px; font-family:'D2Coding',monospace; font-size:13.5px;
+    line-height:1.85; overflow-x:auto; color:var(--text); white-space:pre;
+    background:#0c0e14; border-left:3px solid var(--purple);
+  }
+  .code-tab-panel.active { display:block; }
+  .kw { color:#ff7b72; } .fn { color:#d2a8ff; } .st { color:#a5d6ff; }
+  .cm { color:#484f5b; } .tp { color:#79c0ff; } .an { color:#ffa657; }
+
+  /* ── Closer ── */
+  .closer {
+    margin-top:64px; padding:40px; border-radius:20px; text-align:center;
+    background:linear-gradient(135deg, rgba(167,139,250,0.06), rgba(255,77,106,0.04));
+    border:1px solid rgba(167,139,250,0.12);
+  }
+  .closer h2 { font-weight:900; font-size:28px; color:var(--text-bright); margin-bottom:12px; }
+  .closer p { font-size:16px; color:var(--dim); max-width:640px; margin:0 auto; line-height:1.7; }
+  .closer-tags {
+    display:flex; justify-content:center; gap:10px; margin-top:20px; flex-wrap:wrap;
+  }
+  .closer-tags span {
+    font-family:'Noto Sans KR',sans-serif; font-size:13px; font-weight:700;
+    padding:8px 18px; border-radius:10px; border:1px solid var(--border); background:var(--surface);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width:900px) {
+    .exp-grid, .sim-visual, .myth-grid { grid-template-columns:1fr; }
+    .sol-grid { grid-template-columns:1fr 1fr; }
+    .proxy-diagram { flex-direction:column; gap:8px; }
+    .proxy-arrow { transform:rotate(90deg); }
+  }
+  @media (max-width:600px) {
+    .page-wrap { padding:0 14px 60px; }
+    .masthead { padding:50px 0 40px; }
+    .sol-grid { grid-template-columns:1fr; }
+    .sim-visual { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+<div class="page-wrap">
+
+  <!-- ═══ MASTHEAD ═══ -->
+  <header class="masthead">
+    <div class="masthead-tag">Lab 01 &mdash; Spring AOP Proxy</div>
+    <h1>this.method()는 왜<br><em>@Transactional</em>을<br>무시하는가?</h1>
+    <p class="masthead-sub">
+      같은 클래스 내부에서 호출하면 CGLIB 프록시를 우회합니다.
+      <code class="mono">REQUIRES_NEW</code>, <code class="mono">readOnly</code>, <code class="mono">timeout</code>
+      &mdash; 모든 속성이 조용히 무시됩니다. 런타임 예외 없이.
+    </p>
+  </header>
+
+  <!-- ═══ PROXY DIAGRAM ═══ -->
+  <section class="section">
+    <div class="sec-label">01 &mdash; Core Mechanism</div>
+    <h2 class="section-title">AOP 프록시 동작 원리</h2>
+    <p>Spring은 @Transactional이 붙은 Bean을 프록시로 감쌉니다. 외부 호출은 프록시를 통과하지만, 내부 호출은 우회합니다.</p>
+
+    <div class="proxy-diagram">
+      <div class="proxy-layer layer-controller">
+        <div class="p-label">Controller</div>
+        <div class="p-name">외부 호출자</div>
+        <div class="p-detail">Bean을 주입받아 호출</div>
+      </div>
+      <div class="proxy-arrow">&rarr;</div>
+      <div class="proxy-layer layer-proxy">
+        <div class="p-label">CGLIB Proxy</div>
+        <div class="p-name">TransactionInterceptor</div>
+        <div class="p-detail">트랜잭션 시작/커밋/롤백</div>
+      </div>
+      <div class="proxy-arrow">&rarr;</div>
+      <div class="proxy-layer layer-target">
+        <div class="p-label">Target Bean</div>
+        <div class="p-name">실제 객체</div>
+        <div class="p-detail">this = 프록시가 아닌 원본!</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ STEP-BY-STEP ═══ -->
+  <section class="section">
+    <div class="sec-label">02 &mdash; Why It Happens</div>
+    <h2 class="section-title">왜 this.method()는 프록시를 우회하는가</h2>
+    <p>6단계로 추적하면 문제의 원인이 명확해집니다.</p>
+
+    <div class="step-flow">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Controller가 프록시를 호출</h4>
+          <p><code>proxy.experimentSelfInvocation()</code> &mdash; Controller가 주입받은 것은 프록시 인스턴스</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>CGLIB 프록시가 호출을 가로챔</h4>
+          <p>프록시의 메서드 오버라이드가 실행됨. 인터셉터 체인으로 진입</p>
+        </div>
+      </div>
+      <div class="step-item success">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>TransactionInterceptor가 트랜잭션 시작</h4>
+          <p><code>JpaTransactionManager.doBegin()</code> &rarr; tx name 설정 &rarr; ThreadLocal에 메타데이터 저장</p>
+        </div>
+      </div>
+      <div class="step-item danger">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h4>실제 target 객체의 메서드 호출</h4>
+          <p>이 시점에서 <strong style="color:var(--red);">this = target 객체 (프록시가 아님!)</strong>. 프록시는 <code>target.method()</code>를 호출하기 때문</p>
+        </div>
+      </div>
+      <div class="step-item danger">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h4>this.innerMethod() &rarr; 프록시 우회!</h4>
+          <p><code>this</code>는 raw target이므로 TransactionInterceptor가 실행되지 않음. <strong style="color:var(--red);">@Transactional(REQUIRES_NEW) 완전 무시</strong></p>
+        </div>
+      </div>
+      <div class="step-item danger">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <h4>innerMethod()는 일반 메서드 호출처럼 실행</h4>
+          <p>새 트랜잭션도, 읽기 전용도, 타임아웃도 &mdash; 아무것도 적용되지 않음. getCurrentTransactionName()은 외부 메서드의 이름을 그대로 반환</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ INTERACTIVE SIM ═══ -->
+  <section class="section">
+    <div class="sec-label">03 &mdash; Simulator</div>
+    <h2 class="section-title">직접 비교해보세요</h2>
+    <p>두 패널을 클릭하여 자기 호출과 외부 호출의 차이를 관찰하세요.</p>
+
+    <div class="sim-panel">
+      <div class="sim-toolbar">
+        <div class="dot" style="background:#ff5f57;"></div>
+        <div class="dot" style="background:#febc2e;"></div>
+        <div class="dot" style="background:#28c840;"></div>
+        <span class="title">proxy-simulator</span>
+      </div>
+      <div class="sim-visual">
+        <div class="sim-half" id="simSelf" onclick="simSelfCall()">
+          <h3 style="color:var(--red);">실험 1-A: 자기 호출</h3>
+          <div class="hint">클릭하여 시뮬레이션</div>
+          <div class="proxy-vis" id="visSelf">
+            <div class="pv-arrow pv-arrow-in">&rarr;</div>
+            <div class="pv-outer">
+              <div class="pv-outer-label">CGLIB Proxy</div>
+              <div class="pv-inner">
+                Target<br>Bean
+                <span>this.inner()</span>
+              </div>
+            </div>
+            <div class="pv-arrow pv-arrow-self">&circlearrowleft; this 호출 (프록시 우회)</div>
+          </div>
+          <div style="font-family:'D2Coding',monospace;font-size:13px;color:var(--dim);">same_transaction = <strong id="selfResult">?</strong></div>
+        </div>
+        <div class="sim-half" id="simExt" onclick="simExtCall()">
+          <h3 style="color:var(--green);">실험 1-B: 외부 호출</h3>
+          <div class="hint">클릭하여 시뮬레이션</div>
+          <div class="proxy-vis" id="visExt">
+            <div class="pv-arrow pv-arrow-in">&rarr;</div>
+            <div class="pv-outer">
+              <div class="pv-outer-label">CGLIB Proxy</div>
+              <div class="pv-inner">
+                External<br>Service
+                <span>proxy.inner()</span>
+              </div>
+            </div>
+            <div class="pv-arrow pv-arrow-self">&circlearrowleft;</div>
+          </div>
+          <div style="font-family:'D2Coding',monospace;font-size:13px;color:var(--dim);">same_transaction = <strong id="extResult">?</strong></div>
+        </div>
+      </div>
+      <div class="sim-output" id="simOut">
+        <div>패널을 클릭하면 호출 흐름이 표시됩니다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ EXPERIMENT RESULTS ═══ -->
+  <section class="section">
+    <div class="sec-label">04 &mdash; Experiments</div>
+    <h2 class="section-title">실험 결과</h2>
+
+    <div class="exp-grid">
+      <div class="exp-card exp-fail">
+        <div class="exp-header">
+          <span class="exp-badge">GET</span>
+          <h3>실험 1-A: 자기 호출</h3>
+        </div>
+        <div class="exp-body">
+          <p>같은 클래스 내에서 <code class="mono">REQUIRES_NEW</code> 메서드를 직접 호출. <code class="mono">this.innerMethodWithRequiresNew()</code>는 프록시를 우회하여 같은 트랜잭션에서 실행됩니다.</p>
+          <div class="exp-result">outer_tx = "...experimentSelfInvocation"
+inner_tx = "...experimentSelfInvocation"
+same_transaction = <strong>true</strong>  // REQUIRES_NEW 무시됨!</div>
+        </div>
+      </div>
+      <div class="exp-card exp-pass">
+        <div class="exp-header">
+          <span class="exp-badge">GET</span>
+          <h3>실험 1-B: 외부 호출</h3>
+        </div>
+        <div class="exp-body">
+          <p>별도 Bean의 <code class="mono">REQUIRES_NEW</code> 메서드를 호출. 프록시를 통과하므로 TransactionInterceptor가 정상 실행되어 새 트랜잭션이 생성됩니다.</p>
+          <div class="exp-result">outer_tx = "...experimentExternalCall"
+inner_tx = "...methodWithRequiresNew"
+same_transaction = <strong>false</strong>  // 정상 동작!</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SOLUTIONS ═══ -->
+  <section class="section">
+    <div class="sec-label">05 &mdash; Solutions</div>
+    <h2 class="section-title">해결 방법</h2>
+
+    <div class="sol-grid">
+      <div class="sol-card recommended">
+        <div class="sol-tag" style="background:var(--green-dim);color:var(--green);">권장</div>
+        <h4>별도 서비스 분리</h4>
+        <p>트랜잭션 경계가 필요한 메서드를 다른 @Service 클래스로 이동</p>
+        <div class="pros">+ SRP 준수, 테스트 용이</div>
+        <div class="cons">- 클래스 수 증가</div>
+      </div>
+      <div class="sol-card">
+        <div class="sol-tag" style="background:var(--cyan-dim);color:var(--cyan);">대안</div>
+        <h4>@Lazy Self-Injection</h4>
+        <p>자기 자신의 프록시를 @Lazy @Autowired로 주입하여 self.method()로 호출</p>
+        <div class="pros">+ 최소한의 코드 변경</div>
+        <div class="cons">- 순환 결합 암시, @Lazy 필수</div>
+      </div>
+      <div class="sol-card">
+        <div class="sol-tag" style="background:var(--amber-dim);color:var(--amber);">비권장</div>
+        <h4>ApplicationContext</h4>
+        <p>context.getBean()으로 프록시를 직접 꺼내 호출</p>
+        <div class="pros">+ 어디서든 사용 가능</div>
+        <div class="cons">- Service Locator 안티패턴</div>
+      </div>
+      <div class="sol-card">
+        <div class="sol-tag" style="background:var(--purple-dim);color:var(--purple);">고급</div>
+        <h4>AspectJ 모드</h4>
+        <p>바이트코드 위빙으로 프록시 없이 AOP 적용. 자기 호출 문제 완전 해결</p>
+        <div class="pros">+ 완전한 AOP</div>
+        <div class="cons">- 빌드 복잡성 대폭 증가</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CODE ═══ -->
+  <section class="section">
+    <div class="sec-label">06 &mdash; Code</div>
+    <h2 class="section-title">실험 코드</h2>
+
+    <div class="code-tabs">
+      <div class="code-tab-bar">
+        <button class="code-tab active" onclick="switchTab(0)">1-A: 자기 호출 (문제)</button>
+        <button class="code-tab" onclick="switchTab(1)">1-B: 외부 호출 (정상)</button>
+        <button class="code-tab" onclick="switchTab(2)">Self-Injection 해결</button>
+      </div>
+      <div class="code-tab-panel active" id="codePanel0"><span class="an">@Transactional</span>
+<span class="kw">fun</span> <span class="fn">experimentSelfInvocation</span>(): <span class="tp">Map</span>&lt;<span class="tp">String</span>, <span class="tp">Any</span>&gt; {
+    <span class="kw">val</span> outerTxName = TransactionSynchronizationManager.<span class="fn">getCurrentTransactionName</span>()
+
+    <span class="cm">// 자기 호출 - 프록시 우회!</span>
+    <span class="kw">val</span> innerResult = <span class="fn">innerMethodWithRequiresNew</span>()  <span class="cm">// this.method()</span>
+
+    result[<span class="st">"same_transaction"</span>] = (outerTxName == innerResult[<span class="st">"tx_name"</span>])  <span class="cm">// true!</span>
+}
+
+<span class="an">@Transactional</span>(propagation = Propagation.<span class="st">REQUIRES_NEW</span>)
+<span class="kw">fun</span> <span class="fn">innerMethodWithRequiresNew</span>(): <span class="tp">Map</span>&lt;<span class="tp">String</span>, <span class="tp">Any?</span>&gt; {
+    <span class="cm">// REQUIRES_NEW지만 자기 호출이므로 새 트랜잭션이 생성되지 않음</span>
+    <span class="kw">val</span> txName = TransactionSynchronizationManager.<span class="fn">getCurrentTransactionName</span>()
+    <span class="kw">return</span> <span class="fn">mapOf</span>(<span class="st">"tx_name"</span> to txName)
+}</div>
+      <div class="code-tab-panel" id="codePanel1"><span class="an">@Transactional</span>
+<span class="kw">fun</span> <span class="fn">experimentExternalCall</span>(
+    externalService: <span class="tp">TransactionExperimentExternalService</span>
+): <span class="tp">Map</span>&lt;<span class="tp">String</span>, <span class="tp">Any</span>&gt; {
+    <span class="kw">val</span> outerTxName = TransactionSynchronizationManager.<span class="fn">getCurrentTransactionName</span>()
+
+    <span class="cm">// 외부 서비스 호출 - 프록시를 통함!</span>
+    <span class="kw">val</span> innerResult = externalService.<span class="fn">methodWithRequiresNew</span>()  <span class="cm">// proxy.method()</span>
+
+    result[<span class="st">"same_transaction"</span>] = (outerTxName == innerResult[<span class="st">"tx_name"</span>])  <span class="cm">// false!</span>
+}</div>
+      <div class="code-tab-panel" id="codePanel2"><span class="an">@Service</span>
+<span class="kw">class</span> <span class="fn">MyService</span> {
+    <span class="an">@Lazy</span> <span class="an">@Autowired</span>
+    <span class="kw">private lateinit var</span> self: <span class="tp">MyService</span>  <span class="cm">// 자기 자신의 프록시 주입</span>
+
+    <span class="an">@Transactional</span>
+    <span class="kw">fun</span> <span class="fn">outerMethod</span>() {
+        self.<span class="fn">innerMethod</span>()  <span class="cm">// 프록시를 통해 호출 → 정상 동작!</span>
+    }
+
+    <span class="an">@Transactional</span>(propagation = Propagation.<span class="st">REQUIRES_NEW</span>)
+    <span class="kw">fun</span> <span class="fn">innerMethod</span>() { <span class="cm">/* ... */</span> }
+}
+
+<span class="cm">// @Lazy를 사용하면 실제 빈 대신 lazy 프록시가 주입되어 순환 참조를 회피한다.</span>
+<span class="cm">// Spring Boot 3.0+에서는 allow-circular-references가 기본 false이므로</span>
+<span class="cm">// @Lazy 없이는 시작 실패한다.</span></div>
+    </div>
+  </section>
+
+  <!-- ═══ MYTHS ═══ -->
+  <section class="section">
+    <div class="sec-label">07 &mdash; Myths</div>
+    <h2 class="section-title">흔한 오해와 실제 동작</h2>
+
+    <div class="myth-grid">
+      <div class="myth-card">
+        <div class="myth-side myth-wrong">
+          <h4>오해</h4>
+          <p>"private 메서드만 문제된다"</p>
+        </div>
+        <div class="myth-side myth-right">
+          <h4>실제</h4>
+          <p>public 메서드도 자기 호출이면 동일하게 무시됨 (이 실험이 증명)</p>
+        </div>
+      </div>
+      <div class="myth-card">
+        <div class="myth-side myth-wrong">
+          <h4>오해</h4>
+          <p>"같은 패키지면 안 된다"</p>
+        </div>
+        <div class="myth-side myth-right">
+          <h4>실제</h4>
+          <p>프록시 우회 여부는 this 참조 사용 여부에 달림. 다른 Bean이면 같은 패키지여도 정상</p>
+        </div>
+      </div>
+      <div class="myth-card">
+        <div class="myth-side myth-wrong">
+          <h4>오해</h4>
+          <p>"@Transactional 없는 메서드에서 호출하면 괜찮다"</p>
+        </div>
+        <div class="myth-side myth-right">
+          <h4>실제</h4>
+          <p>외부→내부든, 내부→내부든 this.method()면 항상 프록시 우회</p>
+        </div>
+      </div>
+      <div class="myth-card">
+        <div class="myth-side myth-wrong">
+          <h4>오해</h4>
+          <p>"Spring Boot에서는 해결됐다"</p>
+        </div>
+        <div class="myth-side myth-right">
+          <h4>실제</h4>
+          <p>Spring Boot도 동일한 프록시 기반 AOP를 사용. 해결되지 않았음</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CLOSER ═══ -->
+  <div class="closer">
+    <h2>this.method()는 프록시를 우회한다</h2>
+    <p>
+      트랜잭션 경계가 필요한 메서드는 <strong style="color:var(--green);">별도 서비스로 분리</strong>하세요.
+      자기 호출이 불가피하면 <strong style="color:var(--cyan);">@Lazy Self-Injection</strong>을 사용하세요.
+      <code class="mono" style="color:var(--purple);">REQUIRES_NEW</code>, <code class="mono" style="color:var(--purple);">readOnly</code>, <code class="mono" style="color:var(--purple);">timeout</code>
+      &mdash; 모든 속성이 동일하게 영향받습니다.
+    </p>
+    <div class="closer-tags">
+      <span style="color:var(--red);">자기 호출 = 프록시 우회</span>
+      <span style="color:var(--green);">1순위: 별도 서비스 분리</span>
+      <span style="color:var(--cyan);">2순위: @Lazy Self-Injection</span>
+      <span style="color:var(--purple);">관련: Lab 04 트랜잭션 전파</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchTab(idx) {
+    document.querySelectorAll('.code-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+    document.querySelectorAll('.code-tab-panel').forEach((p,i) => p.classList.toggle('active', i===idx));
+  }
+
+  const simOut = document.getElementById('simOut');
+  function log(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    simOut.appendChild(d);
+    simOut.scrollTop = simOut.scrollHeight;
+  }
+
+  function simSelfCall() {
+    document.getElementById('simSelf').classList.add('active-self');
+    document.getElementById('simExt').classList.remove('active-ext');
+    document.getElementById('visSelf').className = 'proxy-vis state-self';
+    document.getElementById('visExt').className = 'proxy-vis';
+    document.getElementById('selfResult').innerHTML = '<span style="color:var(--red)">true</span>';
+    document.getElementById('extResult').innerHTML = '?';
+
+    simOut.innerHTML = '';
+    log('<span class="pur">$ GET /api/v1/experiments/self-invocation</span>');
+    log('<span class="info">  Controller → proxy.experimentSelfInvocation()</span>');
+    log('<span class="info">  TransactionInterceptor → 트랜잭션 시작</span>');
+    log('<span class="warn">  tx name = "...experimentSelfInvocation"</span>');
+    log('');
+    log('<span class="err">  target 내부: this.innerMethodWithRequiresNew()</span>');
+    log('<span class="err">  ↑ this = raw target → 프록시 우회!</span>');
+    log('<span class="err">  TransactionInterceptor 미실행 → REQUIRES_NEW 무시</span>');
+    log('');
+    log('<span class="err">  outer_tx = "...experimentSelfInvocation"</span>');
+    log('<span class="err">  inner_tx = "...experimentSelfInvocation"  ← 같음!</span>');
+    log('<span class="err">  same_transaction = true  // REQUIRES_NEW 무시됨</span>');
+  }
+
+  function simExtCall() {
+    document.getElementById('simExt').classList.add('active-ext');
+    document.getElementById('simSelf').classList.remove('active-self');
+    document.getElementById('visExt').className = 'proxy-vis state-ext';
+    document.getElementById('visSelf').className = 'proxy-vis';
+    document.getElementById('extResult').innerHTML = '<span style="color:var(--green)">false</span>';
+    document.getElementById('selfResult').innerHTML = '?';
+
+    simOut.innerHTML = '';
+    log('<span class="pur">$ GET /api/v1/experiments/external-call</span>');
+    log('<span class="info">  Controller → proxy.experimentExternalCall()</span>');
+    log('<span class="info">  TransactionInterceptor → Outer 트랜잭션 시작</span>');
+    log('<span class="warn">  tx name = "...experimentExternalCall"</span>');
+    log('');
+    log('<span class="ok">  externalService.methodWithRequiresNew()</span>');
+    log('<span class="ok">  ↑ externalService는 프록시 참조 → TransactionInterceptor 실행!</span>');
+    log('<span class="ok">  REQUIRES_NEW 감지 → Outer 트랜잭션 suspend</span>');
+    log('<span class="ok">  새 트랜잭션 시작 → 새 DB 커넥션 획득</span>');
+    log('');
+    log('<span class="ok">  outer_tx = "...experimentExternalCall"</span>');
+    log('<span class="ok">  inner_tx = "...methodWithRequiresNew"  ← 다름!</span>');
+    log('<span class="ok">  same_transaction = false  // 정상 동작!</span>');
+  }
+</script>
+</body>
+</html>

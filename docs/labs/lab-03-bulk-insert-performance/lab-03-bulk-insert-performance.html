@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 03 — JPA vs JdbcTemplate vs Native Bulk Insert</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #08090e;
+    --surface: #11131a;
+    --surface2: #191c27;
+    --border: #2a2f42;
+    --text: #c8cdd8;
+    --text-bright: #eef0f6;
+    --dim: #9ca3b0;
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.12);
+    --amber: #ffb800;
+    --amber-dim: rgba(255,184,0,0.12);
+    --red: #ff4d6a;
+    --red-dim: rgba(255,77,106,0.10);
+    --green: #00e68a;
+    --green-dim: rgba(0,230,138,0.10);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--void);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,212,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 85% 110%, rgba(167,139,250,0.06) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 60% at 50% 50%, rgba(255,184,0,0.03) 0%, transparent 70%);
+  }
+
+  .page-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 28px 80px;
+  }
+
+  /* ── MASTHEAD ── */
+  .masthead {
+    padding: 80px 0 60px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 64px;
+  }
+
+  .masthead-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,212,255,0.25);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+
+  .masthead-tag::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .masthead h1 {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: clamp(32px, 5vw, 54px);
+    font-weight: 900;
+    color: var(--text-bright);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+
+  .masthead h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .masthead-sub {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 16px;
+    color: var(--dim);
+    max-width: 620px;
+    line-height: 1.7;
+  }
+
+  /* ── SECTION LABEL ── */
+  .sec-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 10px;
+    color: var(--cyan);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .section {
+    margin-bottom: 72px;
+  }
+
+  .section-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 28px;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── METRICS ROW ── */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 64px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .metric-card.red::before { background: linear-gradient(90deg, var(--red), transparent); }
+  .metric-card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+  .metric-card.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+  .metric-card.cyan::before { background: linear-gradient(90deg, var(--cyan), transparent); }
+
+  .metric-card:hover { border-color: rgba(0,212,255,0.3); }
+
+  .metric-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .metric-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .metric-card.red .metric-value { color: var(--red); }
+  .metric-card.green .metric-value { color: var(--green); }
+  .metric-card.amber .metric-value { color: var(--amber); }
+  .metric-card.cyan .metric-value { color: var(--cyan); }
+
+  .metric-unit {
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  .winner-badge {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: var(--green-dim);
+    border: 1px solid rgba(0,230,138,0.3);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 10px;
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  /* ── STEP FLOW ── */
+  .method-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .method-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .method-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .method-icon.red { background: var(--red-dim); }
+  .method-icon.green { background: var(--green-dim); }
+  .method-icon.amber { background: var(--amber-dim); }
+
+  .method-name {
+    font-family: 'D2Coding', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+  }
+
+  .method-desc {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    color: var(--dim);
+  }
+
+  .step-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .step {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .step-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    color: #ffffff;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  .chip.red { background: var(--red-dim); border-color: rgba(255,77,106,0.25); color: var(--red); }
+  .chip.green { background: var(--green-dim); border-color: rgba(0,230,138,0.25); color: var(--green); }
+  .chip.amber { background: var(--amber-dim); border-color: rgba(255,184,0,0.25); color: var(--amber); }
+  .chip.cyan { background: var(--cyan-dim); border-color: rgba(0,212,255,0.25); color: var(--cyan); }
+
+  /* ── SQL TRANSFORM ── */
+  .sql-transform {
+    background: #0c0e14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+  }
+
+  .sql-label {
+    font-family: 'D2Coding', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .sql-label.before { color: var(--red); }
+  .sql-label.after { color: var(--green); }
+
+  .sql-code {
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    color: var(--text);
+    white-space: pre;
+    line-height: 1.6;
+  }
+
+  .sql-arrow-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+    padding: 0 4px;
+  }
+
+  .sql-arrow-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+  }
+
+  .sql-arrow-text {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    color: var(--green);
+    white-space: nowrap;
+  }
+
+  /* ── RESULTS SECTION ── */
+  .results-group {
+    margin-bottom: 48px;
+  }
+
+  .results-sub-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .results-sub-title .scale-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-family: 'DM Serif Display', serif;
+    font-size: 15px;
+    color: var(--cyan);
+  }
+
+  .rank-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .rank-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+  }
+
+  .rank-card.rank-1 { border-color: rgba(0,230,138,0.3); background: rgba(0,230,138,0.03); }
+  .rank-card.rank-2 { border-color: rgba(255,184,0,0.25); }
+  .rank-card.rank-3 { border-color: rgba(255,77,106,0.2); }
+
+  .rank-badge {
+    font-family: 'DM Serif Display', serif;
+    font-size: 11px;
+    font-weight: 400;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .rank-1 .rank-badge { color: var(--green); }
+  .rank-2 .rank-badge { color: var(--amber); }
+  .rank-3 .rank-badge { color: var(--red); }
+
+  .rank-method {
+    font-family: 'D2Coding', monospace;
+    font-size: 13px;
+    color: var(--text-bright);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .rank-time {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px;
+    margin-bottom: 4px;
+  }
+
+  .rank-1 .rank-time { color: var(--green); }
+  .rank-2 .rank-time { color: var(--amber); }
+  .rank-3 .rank-time { color: var(--red); }
+
+  .rank-throughput {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  /* ── PERF BAR CHART ── */
+  .bar-chart {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
+  .bar-row:last-child { margin-bottom: 0; }
+
+  .bar-method-label {
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    width: 130px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 28px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 10px;
+    font-family: 'DM Serif Display', serif;
+    font-size: 13px;
+    color: rgba(0,0,0,0.8);
+    font-weight: 400;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 60px;
+    white-space: nowrap;
+  }
+
+  .bar-fill.green { background: linear-gradient(90deg, var(--green), rgba(0,230,138,0.7)); }
+  .bar-fill.amber { background: linear-gradient(90deg, var(--amber), rgba(255,184,0,0.7)); }
+  .bar-fill.red { background: linear-gradient(90deg, var(--red), rgba(255,77,106,0.7)); }
+
+  /* ── LANE DIAGRAM ── */
+  .lane-diagram {
+    background: #1a2332;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .lane-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 20px;
+  }
+
+  .lane-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .lane-row:last-child { margin-bottom: 0; }
+
+  .lane-name {
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    width: 160px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .lane-bar-wrap {
+    flex: 1;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .lane-seg {
+    height: 32px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 0 8px;
+    overflow: hidden;
+  }
+
+  .lane-seg.cyan { background: var(--cyan-dim); border: 1px solid rgba(0,212,255,0.25); color: var(--cyan); }
+  .lane-seg.green { background: var(--green-dim); border: 1px solid rgba(0,230,138,0.25); color: var(--green); }
+  .lane-seg.amber { background: var(--amber-dim); border: 1px solid rgba(255,184,0,0.25); color: var(--amber); }
+  .lane-seg.red { background: var(--red-dim); border: 1px solid rgba(255,77,106,0.25); color: var(--red); }
+  .lane-seg.purple { background: var(--purple-dim); border: 1px solid rgba(167,139,250,0.25); color: var(--purple); }
+  .lane-seg.surface { background: var(--surface2); border: 1px solid var(--border); color: var(--dim); }
+
+  /* ── RECOMMENDATION CARDS ── */
+  .rec-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .rec-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .rec-card.rec-jpa::before { background: linear-gradient(90deg, var(--red), transparent); }
+  .rec-card.rec-jdbc::before { background: linear-gradient(90deg, var(--green), transparent); }
+  .rec-card.rec-native::before { background: linear-gradient(90deg, var(--amber), transparent); }
+
+  .rec-card.rec-jdbc { border-color: rgba(0,230,138,0.25); }
+
+  .rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+
+  .rec-jpa .rec-badge { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,106,0.25); }
+  .rec-jdbc .rec-badge { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,230,138,0.3); }
+  .rec-native .rec-badge { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,184,0,0.25); }
+
+  .rec-title {
+    font-family: 'D2Coding', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .rec-scale {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    color: var(--dim);
+    margin-bottom: 14px;
+  }
+
+  .rec-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .rec-list li {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--text);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .rec-list li::before {
+    content: '→';
+    flex-shrink: 0;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    margin-top: 1px;
+  }
+
+  .rec-jpa .rec-list li::before { color: var(--red); }
+  .rec-jdbc .rec-list li::before { color: var(--green); }
+  .rec-native .rec-list li::before { color: var(--amber); }
+
+  .rec-recommended {
+    margin-top: 16px;
+    background: var(--green-dim);
+    border: 1px solid rgba(0,230,138,0.25);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--green);
+    font-weight: 700;
+    text-align: center;
+  }
+
+  /* ── CODE TABS ── */
+  .code-tabs {
+    background: #0c0e14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .code-tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .code-tab-btn {
+    padding: 10px 18px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .code-tab-btn.active {
+    color: var(--cyan);
+    border-bottom-color: var(--cyan);
+  }
+
+  .code-tab-btn:hover:not(.active) { color: var(--text); }
+
+  .code-panel {
+    display: none;
+    padding: 0;
+  }
+
+  .code-panel.active { display: block; }
+
+  .code-block {
+    border-left: 3px solid var(--cyan);
+    padding: 20px 24px;
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    color: var(--text);
+    white-space: pre;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  .code-block.amber { border-left-color: var(--amber); }
+  .code-block.red { border-left-color: var(--red); }
+  .code-block.green { border-left-color: var(--green); }
+
+  .code-comment { color: #4a5568; }
+  .code-keyword { color: var(--purple); }
+  .code-string { color: var(--green); }
+  .code-annotation { color: var(--amber); }
+  .code-type { color: var(--cyan); }
+
+  /* ── WARNING CARD ── */
+  .warn-card {
+    background: var(--amber-dim);
+    border: 1px solid rgba(255,184,0,0.25);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .warn-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .warn-text {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    color: var(--amber);
+    line-height: 1.6;
+  }
+
+  .warn-text strong {
+    font-weight: 700;
+    color: var(--amber);
+  }
+
+  /* ── CLOSER ── */
+  .closer {
+    background: linear-gradient(135deg, rgba(0,212,255,0.08) 0%, rgba(167,139,250,0.08) 50%, rgba(0,230,138,0.06) 100%);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 16px;
+    padding: 48px 40px;
+    text-align: center;
+    margin-top: 72px;
+  }
+
+  .closer-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--text-bright);
+    line-height: 1.4;
+    margin-bottom: 24px;
+    letter-spacing: -0.01em;
+  }
+
+  .closer-title em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--green) 0%, var(--cyan) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .closer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .closer-tag {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+  }
+
+  .closer-tag.highlight {
+    background: var(--green-dim);
+    border-color: rgba(0,230,138,0.3);
+    color: var(--green);
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 56px 0;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .metrics-row { grid-template-columns: repeat(2, 1fr); }
+    .rank-grid { grid-template-columns: repeat(3, 1fr); }
+    .rec-grid { grid-template-columns: 1fr; }
+    .step-flow { gap: 4px; }
+    .lane-name { width: 100px; }
+  }
+
+  @media (max-width: 600px) {
+    .page-wrap { padding: 0 16px 60px; }
+    .masthead { padding: 48px 0 40px; }
+    .metrics-row { grid-template-columns: 1fr 1fr; }
+    .rank-grid { grid-template-columns: 1fr; }
+    .bar-method-label { width: 90px; font-size: 10px; }
+    .step-flow { flex-direction: column; gap: 4px; }
+    .step-arrow { transform: rotate(90deg); }
+    .lane-name { width: 80px; font-size: 10px; }
+  }
+
+  /* Animated bar on scroll */
+  .bar-fill[data-width] {
+    width: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<div class="page-wrap">
+
+  <!-- MASTHEAD -->
+  <header class="masthead">
+    <div class="masthead-tag">Lab 03 — Performance Benchmark</div>
+    <h1>JPA vs JdbcTemplate vs<br><em>Native Bulk</em> Insert</h1>
+    <p class="masthead-sub">대량 데이터 Insert 시 3가지 방법의 성능을 실측 비교. JdbcTemplate이 모든 건수에서 1위.</p>
+  </header>
+
+  <!-- METRICS ROW -->
+  <div class="metrics-row">
+    <div class="metric-card red">
+      <div class="metric-label">JPA saveAll</div>
+      <div class="metric-value">5,585</div>
+      <div class="metric-unit">ms · 10,000건</div>
+    </div>
+    <div class="metric-card green">
+      <div class="winner-badge">1위</div>
+      <div class="metric-label">JdbcTemplate</div>
+      <div class="metric-value">354</div>
+      <div class="metric-unit">ms · 10,000건</div>
+    </div>
+    <div class="metric-card amber">
+      <div class="metric-label">Native Bulk</div>
+      <div class="metric-value">2,751</div>
+      <div class="metric-unit">ms · 10,000건</div>
+    </div>
+    <div class="metric-card cyan">
+      <div class="metric-label">테스트 규모</div>
+      <div class="metric-value">10K</div>
+      <div class="metric-unit">건 · 최대 측정</div>
+    </div>
+  </div>
+
+  <!-- SECTION 01 — HOW EACH METHOD WORKS -->
+  <section class="section">
+    <div class="sec-label">Section 01</div>
+    <h2 class="section-title">각 방법의 내부 동작 원리</h2>
+
+    <!-- JPA saveAll -->
+    <div class="method-block">
+      <div class="method-header">
+        <div class="method-icon red">🔴</div>
+        <div>
+          <div class="method-name">JPA saveAll()</div>
+          <div class="method-desc">엔티티 라이프사이클 전체를 거치는 방식</div>
+        </div>
+      </div>
+      <div class="step-flow">
+        <div class="step">persist() 호출</div>
+        <div class="step-arrow">→</div>
+        <div class="step">1차캐시 저장</div>
+        <div class="step-arrow">→</div>
+        <div class="step">스냅샷 생성</div>
+        <div class="step-arrow">→</div>
+        <div class="step">더티체킹 등록</div>
+        <div class="step-arrow">→</div>
+        <div class="step">INSERT (batch_size만큼)</div>
+      </div>
+      <div class="chip-row">
+        <span class="chip red">엔티티 라이프사이클</span>
+        <span class="chip red">@PrePersist 콜백</span>
+        <span class="chip red">메모리 높음</span>
+        <span class="chip">IDENTITY 전략 시 배치 불가</span>
+        <span class="chip">1차캐시 → 스냅샷 비용</span>
+      </div>
+    </div>
+
+    <!-- JdbcTemplate -->
+    <div class="method-block">
+      <div class="method-header">
+        <div class="method-icon green">🟢</div>
+        <div>
+          <div class="method-name">JdbcTemplate batchUpdate()</div>
+          <div class="method-desc">PreparedStatement 재사용 + rewriteBatchedStatements</div>
+        </div>
+      </div>
+      <div class="step-flow">
+        <div class="step">PreparedStatement 생성(1회)</div>
+        <div class="step-arrow">→</div>
+        <div class="step">파라미터 바인딩(N회)</div>
+        <div class="step-arrow">→</div>
+        <div class="step">addBatch()</div>
+        <div class="step-arrow">→</div>
+        <div class="step">executeBatch()</div>
+      </div>
+
+      <div class="sql-transform">
+        <div class="sql-label before">BEFORE — rewriteBatchedStatements=false</div>
+        <div class="sql-code">INSERT INTO book (title, author, price) VALUES (?);
+INSERT INTO book (title, author, price) VALUES (?);
+INSERT INTO book (title, author, price) VALUES (?);</div>
+        <div class="sql-arrow-row">
+          <div class="sql-arrow-line"></div>
+          <div class="sql-arrow-text">rewriteBatchedStatements=true 활성화</div>
+          <div class="sql-arrow-line"></div>
+        </div>
+        <div class="sql-label after">AFTER — 단일 multi-row INSERT로 변환</div>
+        <div class="sql-code">INSERT INTO book (title, author, price) VALUES (?), (?), (?);</div>
+      </div>
+
+      <div class="chip-row">
+        <span class="chip green">PreparedStatement 재사용</span>
+        <span class="chip green">네트워크 최소화</span>
+        <span class="chip green">타입 안전</span>
+        <span class="chip">MySQL JDBC 드라이버 최적화</span>
+      </div>
+    </div>
+
+    <!-- Native Bulk -->
+    <div class="method-block">
+      <div class="method-header">
+        <div class="method-icon amber">🟡</div>
+        <div>
+          <div class="method-name">Native Bulk INSERT</div>
+          <div class="method-desc">SQL 문자열 직접 생성 — VALUES절에 N개 row</div>
+        </div>
+      </div>
+      <div class="step-flow">
+        <div class="step">SQL 문자열 생성</div>
+        <div class="step-arrow">→</div>
+        <div class="step">VALUES절에 N개 row</div>
+        <div class="step-arrow">→</div>
+        <div class="step">단일 쿼리 DB 전송</div>
+      </div>
+
+      <div class="sql-transform">
+        <div class="sql-label" style="color:var(--amber);">Kotlin — chunked(500) 처리</div>
+        <div class="sql-code"><span class="code-comment">// 500건씩 청크로 나눠 다수의 쿼리 전송</span>
+entities.chunked(500).forEach { chunk ->
+    <span class="code-keyword">val</span> sql = buildString {
+        append(<span class="code-string">"INSERT INTO book (title, author, price) VALUES "</span>)
+        append(chunk.joinToString(<span class="code-string">","</span>) { <span class="code-string">"(?,?,?)"</span> })
+    }
+    jdbcTemplate.update(sql, *chunk.flatMap { listOf(it.title, it.author, it.price) }.toTypedArray())
+}</div>
+      </div>
+
+      <div class="chip-row">
+        <span class="chip amber">최소 네트워크 (청크당)</span>
+        <span class="chip amber">SQL Injection 주의</span>
+        <span class="chip">chunked(500) → 다수 쿼리</span>
+        <span class="chip">문자열 연산 오버헤드</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SECTION 02 — ACTUAL TEST RESULTS -->
+  <section class="section">
+    <div class="sec-label">Section 02</div>
+    <h2 class="section-title">실측 테스트 결과</h2>
+
+    <!-- 100건 -->
+    <div class="results-group">
+      <div class="results-sub-title">
+        <span class="scale-badge">100건</span>
+        소규모 삽입 성능 비교
+      </div>
+      <div class="rank-grid">
+        <div class="rank-card rank-1">
+          <div class="rank-badge">🥇 1위</div>
+          <div class="rank-method">JdbcTemplate</div>
+          <div class="rank-time">10ms</div>
+          <div class="rank-throughput">10,000건/초 처리량</div>
+        </div>
+        <div class="rank-card rank-2">
+          <div class="rank-badge">🥈 2위</div>
+          <div class="rank-method">Native Bulk</div>
+          <div class="rank-time">47ms</div>
+          <div class="rank-throughput">2,128건/초 처리량</div>
+        </div>
+        <div class="rank-card rank-3">
+          <div class="rank-badge">🥉 3위</div>
+          <div class="rank-method">JPA saveAll</div>
+          <div class="rank-time">237ms</div>
+          <div class="rank-throughput">422건/초 처리량</div>
+        </div>
+      </div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-method-label">JdbcTemplate</div>
+          <div class="bar-track">
+            <div class="bar-fill green" data-width="4" style="width:0%">10ms</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-method-label">Native Bulk</div>
+          <div class="bar-track">
+            <div class="bar-fill amber" data-width="20" style="width:0%">47ms</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-method-label">JPA saveAll</div>
+          <div class="bar-track">
+            <div class="bar-fill red" data-width="100" style="width:0%">237ms</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1,000건 -->
+    <div class="results-group">
+      <div class="results-sub-title">
+        <span class="scale-badge">1,000건</span>
+        중규모 삽입 성능 비교
+      </div>
+      <div class="rank-grid">
+        <div class="rank-card rank-1">
+          <div class="rank-badge">🥇 1위</div>
+          <div class="rank-method">JdbcTemplate</div>
+          <div class="rank-time">34ms</div>
+          <div class="rank-throughput">29,412건/초 처리량</div>
+        </div>
+        <div class="rank-card rank-2">
+          <div class="rank-badge">🥈 2위</div>
+          <div class="rank-method">Native Bulk</div>
+          <div class="rank-time">250ms</div>
+          <div class="rank-throughput">4,000건/초 처리량</div>
+        </div>
+        <div class="rank-card rank-3">
+          <div class="rank-badge">🥉 3위</div>
+          <div class="rank-method">JPA saveAll</div>
+          <div class="rank-time">732ms</div>
+          <div class="rank-throughput">1,366건/초 처리량</div>
+        </div>
+      </div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-method-label">JdbcTemplate</div>
+          <div class="bar-track">
+            <div class="bar-fill green" data-width="5" style="width:0%">34ms</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-method-label">Native Bulk</div>
+          <div class="bar-track">
+            <div class="bar-fill amber" data-width="34" style="width:0%">250ms</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-method-label">JPA saveAll</div>
+          <div class="bar-track">
+            <div class="bar-fill red" data-width="100" style="width:0%">732ms</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10,000건 -->
+    <div class="results-group">
+      <div class="results-sub-title">
+        <span class="scale-badge">10,000건</span>
+        대규모 삽입 성능 비교
+      </div>
+      <div class="rank-grid">
+        <div class="rank-card rank-1">
+          <div class="rank-badge">🥇 1위</div>
+          <div class="rank-method">JdbcTemplate</div>
+          <div class="rank-time">354ms</div>
+          <div class="rank-throughput">28,249건/초 처리량</div>
+        </div>
+        <div class="rank-card rank-2">
+          <div class="rank-badge">🥈 2위</div>
+          <div class="rank-method">Native Bulk</div>
+          <div class="rank-time">2,751ms</div>
+          <div class="rank-throughput">3,635건/초 처리량</div>
+        </div>
+        <div class="rank-card rank-3">
+          <div class="rank-badge">🥉 3위</div>
+          <div class="rank-method">JPA saveAll</div>
+          <div class="rank-time">5,585ms</div>
+          <div class="rank-throughput">1,790건/초 처리량</div>
+        </div>
+      </div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-method-label">JdbcTemplate</div>
+          <div class="bar-track">
+            <div class="bar-fill green" data-width="6" style="width:0%">354ms</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-method-label">Native Bulk</div>
+          <div class="bar-track">
+            <div class="bar-fill amber" data-width="49" style="width:0%">2,751ms</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-method-label">JPA saveAll</div>
+          <div class="bar-track">
+            <div class="bar-fill red" data-width="100" style="width:0%">5,585ms</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SECTION 03 — WHY JDBCTEMPLATE WON -->
+  <section class="section">
+    <div class="sec-label">Section 03</div>
+    <h2 class="section-title">JdbcTemplate이 1위인 이유</h2>
+
+    <div class="lane-diagram">
+      <div class="lane-title">Method 내부 처리 흐름 비교</div>
+
+      <div class="lane-row">
+        <div class="lane-name">JdbcTemplate<br>+ rewrite=true</div>
+        <div class="lane-bar-wrap">
+          <div class="lane-seg green" style="flex:1">PreparedStatement(1회)</div>
+          <div class="lane-seg green" style="flex:2">파라미터 바인딩(N회)</div>
+          <div class="lane-seg green" style="flex:3">multi-row INSERT (단일 쿼리)</div>
+        </div>
+      </div>
+
+      <div class="lane-row">
+        <div class="lane-name">Native Bulk<br>chunked(500)</div>
+        <div class="lane-bar-wrap">
+          <div class="lane-seg amber" style="flex:2">SQL 문자열 연산</div>
+          <div class="lane-seg amber" style="flex:1">쿼리1</div>
+          <div class="lane-seg amber" style="flex:1">쿼리2</div>
+          <div class="lane-seg amber" style="flex:1">쿼리3</div>
+          <div class="lane-seg amber" style="flex:1">...</div>
+        </div>
+      </div>
+
+      <div class="lane-row">
+        <div class="lane-name">JPA saveAll</div>
+        <div class="lane-bar-wrap">
+          <div class="lane-seg red" style="flex:2">persist() × N</div>
+          <div class="lane-seg red" style="flex:2">1차캐시 + 스냅샷</div>
+          <div class="lane-seg red" style="flex:2">더티체킹</div>
+          <div class="lane-seg red" style="flex:3">batch INSERT (IDENTITY 불가)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="warn-card">
+      <div class="warn-icon">⚠</div>
+      <div class="warn-text">
+        <strong>Native Bulk가 JdbcTemplate보다 느린 이유:</strong><br>
+        chunked(500)으로 나눠서 전송하므로 10,000건 기준 20번의 네트워크 왕복이 발생합니다.
+        반면 JdbcTemplate + rewriteBatchedStatements=true는 MySQL JDBC 드라이버가 자동으로
+        단일 multi-row INSERT로 변환하여 네트워크 왕복을 최소화합니다.
+        PreparedStatement 재사용까지 더해져 가장 빠른 성능을 보입니다.
+      </div>
+    </div>
+
+    <div class="warn-card" style="background:var(--red-dim);border-color:rgba(255,77,106,0.25);">
+      <div class="warn-icon">🔴</div>
+      <div class="warn-text" style="color:var(--red);">
+        <strong>JPA IDENTITY 전략과 배치 INSERT의 치명적 충돌:</strong><br>
+        IDENTITY 전략은 INSERT 직후 DB에서 생성된 ID를 즉시 조회해야 합니다.
+        이로 인해 Hibernate가 batch INSERT를 비활성화하고 건별 INSERT를 수행합니다.
+        saveAll()을 사용하더라도 배치의 이점을 전혀 누릴 수 없습니다.
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SECTION 04 — WHEN TO USE WHAT -->
+  <section class="section">
+    <div class="sec-label">Section 04</div>
+    <h2 class="section-title">언제 어떤 방법을 선택할까</h2>
+
+    <div class="rec-grid">
+      <div class="rec-card rec-jpa">
+        <div class="rec-badge">JPA saveAll</div>
+        <div class="rec-title">JPA saveAll()</div>
+        <div class="rec-scale">소량 · &lt; 100건</div>
+        <ul class="rec-list">
+          <li>엔티티 콜백 필요 시<br>(@PrePersist, @PostPersist)</li>
+          <li>영속성 컨텍스트 관리 필요</li>
+          <li>유효성 검증 + 비즈니스 로직 포함</li>
+          <li>테스트 코드 · 초기 데이터 적재</li>
+          <li>DirtyChecking 라이프사이클 필요</li>
+        </ul>
+      </div>
+
+      <div class="rec-card rec-jdbc">
+        <div class="rec-badge">★ 추천</div>
+        <div class="rec-title">JdbcTemplate batchUpdate()</div>
+        <div class="rec-scale">중간 규모 · 100건 ~ 10K건</div>
+        <ul class="rec-list">
+          <li>rewriteBatchedStatements=true 필수</li>
+          <li>타입 안전한 파라미터 바인딩</li>
+          <li>Spring 트랜잭션 관리 통합</li>
+          <li>SQL Injection 자동 방지</li>
+          <li>PreparedStatement 재사용 이점</li>
+        </ul>
+        <div class="rec-recommended">모든 건수에서 1위 — 가장 균형 잡힌 선택</div>
+      </div>
+
+      <div class="rec-card rec-native">
+        <div class="rec-badge">Native Bulk</div>
+        <div class="rec-title">Native Bulk INSERT</div>
+        <div class="rec-scale">대량 · &gt; 10K건</div>
+        <ul class="rec-list">
+          <li>최대 성능 필요 시 (chunked 조절)</li>
+          <li>배치 · 마이그레이션 작업</li>
+          <li>SQL Injection 직접 방어 필요</li>
+          <li>LOAD DATA INFILE 대안</li>
+          <li>엔티티 라이프사이클 불필요</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SECTION 05 — OPTIMIZATION TIPS -->
+  <section class="section">
+    <div class="sec-label">Section 05</div>
+    <h2 class="section-title">추가 최적화 팁</h2>
+
+    <div class="code-tabs" id="optTabs">
+      <div class="code-tab-bar">
+        <button class="code-tab-btn active" onclick="switchTab('optTabs', 'identity')">IDENTITY vs SEQUENCE</button>
+        <button class="code-tab-btn" onclick="switchTab('optTabs', 'index')">인덱스 임시 비활성화</button>
+        <button class="code-tab-btn" onclick="switchTab('optTabs', 'loaddata')">LOAD DATA INFILE</button>
+      </div>
+
+      <div class="code-panel active" id="optTabs-identity">
+        <div class="code-block red"><span class="code-comment">// ❌ IDENTITY 전략 — Hibernate가 배치를 자동 비활성화</span>
+<span class="code-annotation">@Entity</span>
+<span class="code-keyword">class</span> <span class="code-type">Book</span>(
+    <span class="code-annotation">@Id</span>
+    <span class="code-annotation">@GeneratedValue</span>(strategy = GenerationType.IDENTITY)
+    <span class="code-keyword">val</span> id: <span class="code-type">Long</span>? = <span class="code-keyword">null</span>
+)
+<span class="code-comment">// INSERT 후 즉시 SELECT LAST_INSERT_ID() → 배치 불가</span></div>
+        <div class="code-block green"><span class="code-comment">// ✅ SEQUENCE 전략 — 배치 INSERT 가능</span>
+<span class="code-annotation">@Entity</span>
+<span class="code-annotation">@SequenceGenerator</span>(name = <span class="code-string">"book_seq"</span>, sequenceName = <span class="code-string">"book_seq"</span>, allocationSize = 50)
+<span class="code-keyword">class</span> <span class="code-type">Book</span>(
+    <span class="code-annotation">@Id</span>
+    <span class="code-annotation">@GeneratedValue</span>(strategy = GenerationType.SEQUENCE, generator = <span class="code-string">"book_seq"</span>)
+    <span class="code-keyword">val</span> id: <span class="code-type">Long</span>? = <span class="code-keyword">null</span>
+)
+<span class="code-comment">// allocationSize=50 → 50개씩 ID 미리 할당 → 배치 INSERT 정상 동작</span></div>
+      </div>
+
+      <div class="code-panel" id="optTabs-index">
+        <div class="code-block amber"><span class="code-comment">-- 대량 삽입 전 보조 인덱스 임시 비활성화 (MyISAM only)</span>
+ALTER TABLE book DISABLE KEYS;
+
+<span class="code-comment">-- 대량 INSERT 수행</span>
+INSERT INTO book (title, author, price)
+VALUES (<span class="code-string">'책1'</span>, <span class="code-string">'저자1'</span>, 15000),
+       (<span class="code-string">'책2'</span>, <span class="code-string">'저자2'</span>, 23000),
+       <span class="code-comment">-- ... N개 rows ...</span>
+
+<span class="code-comment">-- 삽입 완료 후 인덱스 재활성화 (일괄 인덱스 빌드)</span>
+ALTER TABLE book ENABLE KEYS;
+
+<span class="code-comment">-- InnoDB는 innodb_autoinc_lock_mode=2 (interleaved) 설정 권장</span>
+<span class="code-comment">-- SET foreign_key_checks=0 도 함께 사용 가능</span></div>
+      </div>
+
+      <div class="code-panel" id="optTabs-loaddata">
+        <div class="code-block cyan"><span class="code-comment">-- 가장 빠른 방법: LOAD DATA INFILE (파일 기반 직접 적재)</span>
+LOAD DATA INFILE <span class="code-string">'/var/lib/mysql-files/books.csv'</span>
+INTO TABLE book
+FIELDS TERMINATED BY <span class="code-string">','</span>
+OPTIONALLY ENCLOSED BY <span class="code-string">'"'</span>
+LINES TERMINATED BY <span class="code-string">'\n'</span>
+IGNORE 1 ROWS
+(title, author, price);
+
+<span class="code-comment">-- Spring에서 사용 시: LOCAL INFILE 활성화 필요</span>
+<span class="code-comment">-- allowLoadLocalInfile=true (JDBC URL 파라미터)</span>
+<span class="code-comment">-- 초당 수십만 건 처리 가능 — 마이그레이션/초기 적재에 적합</span></div>
+      </div>
+    </div>
+
+    <div class="warn-card" style="background:var(--cyan-dim);border-color:rgba(0,212,255,0.2);">
+      <div class="warn-icon">💡</div>
+      <div class="warn-text" style="color:var(--cyan);">
+        <strong>application.properties 필수 설정:</strong><br>
+        spring.jpa.properties.hibernate.jdbc.batch_size=50<br>
+        spring.jpa.properties.hibernate.order_inserts=true<br>
+        spring.datasource.url=jdbc:mysql://...?rewriteBatchedStatements=true&amp;profileSQL=false
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSER -->
+  <div class="closer">
+    <div class="closer-title">
+      <em>JdbcTemplate batchUpdate + rewriteBatchedStatements</em>가<br>
+      가장 균형 잡힌 선택
+    </div>
+    <div class="closer-tags">
+      <span class="closer-tag highlight">JdbcTemplate 1위</span>
+      <span class="closer-tag highlight">rewriteBatchedStatements</span>
+      <span class="closer-tag">PreparedStatement</span>
+      <span class="closer-tag">타입 안전</span>
+      <span class="closer-tag">Spring 트랜잭션 통합</span>
+      <span class="closer-tag">IDENTITY 전략 배치 불가</span>
+      <span class="closer-tag">10K건 기준 15.8배 차이</span>
+    </div>
+  </div>
+
+</div><!-- .page-wrap -->
+
+<script>
+  // Tab switching
+  function switchTab(groupId, panelKey) {
+    const group = document.getElementById(groupId);
+    group.querySelectorAll('.code-tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', btn.textContent.trim() !== '' &&
+        group.querySelectorAll('.code-panel')[i] &&
+        group.querySelectorAll('.code-panel')[i].id === groupId + '-' + panelKey);
+    });
+    group.querySelectorAll('.code-panel').forEach(p => {
+      p.classList.toggle('active', p.id === groupId + '-' + panelKey);
+    });
+    // Fix button active state by index
+    const panels = group.querySelectorAll('.code-panel');
+    const btns = group.querySelectorAll('.code-tab-btn');
+    panels.forEach((p, i) => {
+      btns[i].classList.toggle('active', p.id === groupId + '-' + panelKey);
+    });
+  }
+
+  // Animate bars on intersection
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const fills = entry.target.querySelectorAll('.bar-fill[data-width]');
+        fills.forEach(fill => {
+          const w = fill.getAttribute('data-width');
+          requestAnimationFrame(() => {
+            fill.style.width = w + '%';
+          });
+        });
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.2 });
+
+  document.querySelectorAll('.bar-chart').forEach(chart => observer.observe(chart));
+</script>
+
+</body>
+</html>

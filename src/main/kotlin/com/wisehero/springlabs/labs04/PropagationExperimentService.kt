@@ -365,11 +365,16 @@ class PropagationExperimentService(
 
     fun experiment4_9_connectionPoolExhaustion(): PropagationResult {
         log.info("========== 실험 4-9: 커넥션 풀 고갈 시뮬레이션 ==========")
-        log.info("HikariCP 기본 풀 사이즈: 10, connectionTimeout: 30초")
-        log.info("REQUIRES_NEW를 11단계 중첩하여 풀 고갈을 유발합니다.")
-        log.info("이 실험은 약 30초 소요됩니다.")
 
-        val maxDepth = 11
+        // 실제 HikariCP 풀 사이즈를 동적으로 읽어서 풀 사이즈 + 1 단계를 중첩
+        val hikari = dataSource as? com.zaxxer.hikari.HikariDataSource
+        val poolSize = hikari?.maximumPoolSize ?: 10
+        val maxDepth = poolSize + 1
+
+        log.info("HikariCP 풀 사이즈: $poolSize, connectionTimeout: ${hikari?.connectionTimeout ?: 30000}ms")
+        log.info("REQUIRES_NEW를 ${maxDepth}단계 중첩하여 풀 고갈을 유발합니다.")
+        val connTimeout = hikari?.connectionTimeout ?: 30000
+        log.info("이 실험은 약 ${connTimeout / 1000}초 소요됩니다.")
         val results = mutableListOf<Map<String, Any>>()
         val startTime = System.currentTimeMillis()
 
@@ -380,7 +385,7 @@ class PropagationExperimentService(
             PropagationResult.connectionInfo(
                 experimentId = "4-9",
                 experimentName = "커넥션 풀 고갈 시뮬레이션",
-                description = "REQUIRES_NEW를 ${maxDepth}단계 중첩했으나 풀이 고갈되지 않음",
+                description = "REQUIRES_NEW를 ${maxDepth}단계(풀 사이즈 ${poolSize} + 1) 중첩했으나 풀이 고갈되지 않음",
                 connectionInfo = mapOf(
                     "max_depth_attempted" to maxDepth,
                     "depth_reached" to results.size,
@@ -401,7 +406,7 @@ class PropagationExperimentService(
             PropagationResult.connectionInfo(
                 experimentId = "4-9",
                 experimentName = "커넥션 풀 고갈 시뮬레이션",
-                description = "REQUIRES_NEW를 ${maxDepth}단계 중첩하여 HikariCP 커넥션 풀 고갈을 시뮬레이션",
+                description = "REQUIRES_NEW를 ${maxDepth}단계(풀 사이즈 ${poolSize} + 1) 중첩하여 HikariCP 커넥션 풀 고갈을 시뮬레이션",
                 connectionInfo = mapOf(
                     "max_depth_attempted" to maxDepth,
                     "depth_reached" to depthReached,
@@ -413,14 +418,14 @@ class PropagationExperimentService(
                 exceptionType = e::class.simpleName,
                 exceptionMessage = e.message,
                 conclusion = "깊이 ${depthReached}까지 성공 후, 깊이 ${depthReached + 1}에서 커넥션 풀 고갈. " +
-                    "HikariCP connectionTimeout(30초) 후 예외 발생. " +
+                    "HikariCP connectionTimeout(${connTimeout / 1000}초) 후 예외 발생. " +
                     "REQUIRES_NEW는 각 호출마다 새 커넥션을 점유하며, outer 커넥션은 suspend 상태로 반환되지 않습니다. " +
                     "중첩 깊이가 풀 사이즈를 초과하면 교착 상태가 발생합니다. " +
                     "실무에서 REQUIRES_NEW를 루프나 재귀 내에서 사용할 때 반드시 주의해야 합니다.",
                 details = mapOf(
-                    "pool_size_default" to 10,
-                    "connection_timeout_ms" to 30000,
-                    "recommendation" to "REQUIRES_NEW 중첩 깊이는 항상 커넥션 풀 사이즈 미만으로 유지하세요."
+                    "pool_size" to poolSize,
+                    "connection_timeout_ms" to connTimeout,
+                    "recommendation" to "REQUIRES_NEW 중첩 깊이는 항상 커넥션 풀 사이즈(현재 ${poolSize}) 미만으로 유지하세요."
                 )
             )
         }

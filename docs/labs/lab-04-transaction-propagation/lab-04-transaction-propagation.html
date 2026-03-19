@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 04 — 트랜잭션 전파: REQUIRED vs REQUIRES_NEW</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #08090e;
+    --surface: #11131a;
+    --surface2: #191c27;
+    --border: #2a2f42;
+    --text: #c8cdd8;
+    --text-bright: #eef0f6;
+    --dim: #9ca3b0;
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.12);
+    --amber: #ffb800;
+    --amber-dim: rgba(255,184,0,0.12);
+    --red: #ff4d6a;
+    --red-dim: rgba(255,77,106,0.10);
+    --green: #00e68a;
+    --green-dim: rgba(0,230,138,0.10);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--void);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,212,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 85% 110%, rgba(167,139,250,0.06) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 60% at 50% 50%, rgba(255,184,0,0.03) 0%, transparent 70%);
+  }
+
+  .page-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 28px 80px;
+  }
+
+  /* ── MASTHEAD ── */
+  .masthead {
+    padding: 80px 0 60px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 64px;
+  }
+
+  .masthead-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,212,255,0.25);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+
+  .masthead-tag::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .masthead h1 {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: clamp(32px, 5vw, 54px);
+    font-weight: 900;
+    color: var(--text-bright);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+
+  .masthead h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .masthead-sub {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 16px;
+    color: var(--dim);
+    max-width: 620px;
+    line-height: 1.7;
+  }
+
+  /* ── SECTION LABEL ── */
+  .sec-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 10px;
+    color: var(--cyan);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .sec-label.amber {
+    background: var(--amber-dim);
+    border-color: rgba(255,184,0,0.2);
+    color: var(--amber);
+  }
+
+  .sec-label.red {
+    background: var(--red-dim);
+    border-color: rgba(255,77,106,0.2);
+    color: var(--red);
+  }
+
+  .sec-label.purple {
+    background: var(--purple-dim);
+    border-color: rgba(167,139,250,0.2);
+    color: var(--purple);
+  }
+
+  .sec-label.green {
+    background: var(--green-dim);
+    border-color: rgba(0,230,138,0.2);
+    color: var(--green);
+  }
+
+  .section {
+    margin-bottom: 72px;
+    padding-top: 64px;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .section-desc {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    color: var(--dim);
+    margin-bottom: 40px;
+  }
+
+  /* ── METRICS ROW ── */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 64px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .metric-card.cyan::before  { background: linear-gradient(90deg, var(--cyan), transparent); }
+  .metric-card.blue::before  { background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+  .metric-card.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+  .metric-card.red::before   { background: linear-gradient(90deg, var(--red), transparent); }
+
+  .metric-card:hover { border-color: rgba(0,212,255,0.3); }
+
+  .metric-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .metric-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .metric-card.cyan  .metric-value { color: var(--cyan); }
+  .metric-card.blue  .metric-value { color: var(--cyan); }
+  .metric-card.amber .metric-value { color: var(--amber); }
+  .metric-card.red   .metric-value { color: var(--red); }
+
+  .metric-unit {
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  /* ── CONCEPT CARDS ── */
+  .concept-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 40px;
+  }
+
+  .concept-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .concept-card.required      { border-color: rgba(0,212,255,0.3); }
+  .concept-card.requires-new  { border-color: rgba(255,184,0,0.3); }
+
+  .concept-card-tag {
+    font-family: 'D2Coding', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+
+  .required .concept-card-tag     { color: var(--cyan);  background: var(--cyan-dim); }
+  .requires-new .concept-card-tag { color: var(--amber); background: var(--amber-dim); }
+
+  .concept-card h3 {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 10px;
+  }
+
+  .concept-card p {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.7;
+    margin-bottom: 16px;
+  }
+
+  .concept-diagram {
+    background: var(--void);
+    border-radius: 10px;
+    padding: 18px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.8;
+  }
+
+  .required .concept-diagram     { border: 1px solid rgba(0,212,255,0.15); }
+  .requires-new .concept-diagram { border: 1px solid rgba(255,184,0,0.15); }
+
+  /* ── SIMULATOR ── */
+  .simulator-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .sim-controls {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    background: var(--void);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .sim-btn {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--surface2);
+    color: var(--dim);
+  }
+
+  .sim-btn:hover { color: var(--text-bright); border-color: var(--dim); }
+  .sim-btn.active.cyan   { color: var(--cyan);  background: var(--cyan-dim);  border-color: rgba(0,212,255,0.4); }
+  .sim-btn.active.amber  { color: var(--amber); background: var(--amber-dim); border-color: rgba(255,184,0,0.4); }
+  .sim-btn.active.red    { color: var(--red);   background: var(--red-dim);   border-color: rgba(255,77,106,0.4); }
+
+  .sim-stage {
+    padding: 32px 24px;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .tx-canvas {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    max-width: 800px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tx-area {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tx-area-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .tx-box {
+    width: 220px;
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid transparent;
+    transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tx-box-inner { position: relative; z-index: 1; }
+
+  .tx-box-name {
+    font-family: 'D2Coding', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+    opacity: 0.8;
+  }
+
+  .tx-box-id {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    margin-bottom: 8px;
+  }
+
+  .tx-box-status {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .tx-box.outer-default {
+    background: rgba(0,212,255,0.07);
+    border-color: rgba(0,212,255,0.4);
+  }
+  .tx-box.outer-default .tx-box-name   { color: var(--cyan); }
+  .tx-box.outer-default .tx-box-id     { color: var(--cyan); }
+  .tx-box.outer-default .tx-box-status { background: var(--cyan-dim); color: var(--cyan); }
+
+  .tx-box.inner-joined {
+    background: rgba(0,212,255,0.07);
+    border-color: rgba(0,212,255,0.4);
+    border-style: dashed;
+  }
+  .tx-box.inner-joined .tx-box-name   { color: var(--cyan); }
+  .tx-box.inner-joined .tx-box-id     { color: var(--cyan); }
+  .tx-box.inner-joined .tx-box-status { background: var(--cyan-dim); color: var(--cyan); }
+
+  .tx-box.inner-new {
+    background: rgba(255,184,0,0.07);
+    border-color: rgba(255,184,0,0.4);
+  }
+  .tx-box.inner-new .tx-box-name   { color: var(--amber); }
+  .tx-box.inner-new .tx-box-id     { color: var(--amber); }
+  .tx-box.inner-new .tx-box-status { background: var(--amber-dim); color: var(--amber); }
+
+  .tx-box.outer-suspended {
+    background: rgba(156,163,176,0.05);
+    border-color: rgba(156,163,176,0.2);
+    opacity: 0.5;
+  }
+  .tx-box.outer-suspended .tx-box-name   { color: var(--dim); }
+  .tx-box.outer-suspended .tx-box-id     { color: var(--dim); }
+  .tx-box.outer-suspended .tx-box-status { background: rgba(156,163,176,0.1); color: var(--dim); }
+
+  .tx-box.rollback-only {
+    background: rgba(255,77,106,0.1);
+    border-color: rgba(255,77,106,0.5);
+    animation: pulse-red 1s ease-in-out infinite;
+  }
+  .tx-box.rollback-only .tx-box-name   { color: var(--red); }
+  .tx-box.rollback-only .tx-box-id     { color: var(--red); }
+  .tx-box.rollback-only .tx-box-status { background: var(--red-dim); color: var(--red); }
+
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,77,106,0); }
+    50%      { box-shadow: 0 0 0 6px rgba(255,77,106,0.15); }
+  }
+
+  .tx-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: #ffffff;
+    font-size: 20px;
+    transition: opacity 0.35s ease;
+  }
+
+  .tx-arrow span {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .tx-box.hidden  { opacity: 0; transform: scale(0.85); pointer-events: none; }
+  .tx-arrow.hidden { opacity: 0; }
+  .tx-box.appear  { opacity: 1; transform: scale(1); }
+
+  .sim-console {
+    background: #0c0e14;
+    border-top: 1px solid var(--border);
+    padding: 20px 24px;
+    min-height: 160px;
+    font-family: 'D2Coding', monospace;
+    font-size: 11.5px;
+    line-height: 1.9;
+  }
+
+  .console-line {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    opacity: 0;
+    transform: translateY(4px);
+    animation: line-appear 0.2s ease forwards;
+  }
+
+  @keyframes line-appear {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .console-ts              { color: var(--dim); flex-shrink: 0; }
+  .console-level           { flex-shrink: 0; font-weight: 700; }
+  .console-level.info      { color: var(--cyan); }
+  .console-level.warn      { color: var(--amber); }
+  .console-level.error     { color: var(--red); }
+  .console-level.debug     { color: var(--purple); }
+  .console-level.success   { color: var(--green); }
+  .console-msg             { color: var(--text); }
+
+  .sim-step-indicator {
+    display: flex;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--void);
+    border-top: 1px solid var(--border);
+    align-items: center;
+  }
+
+  .sim-step-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+  }
+  .sim-step-dot.active { background: var(--cyan); }
+  .sim-step-dot.done   { background: var(--green); }
+  .sim-step-dot.error  { background: var(--red); }
+
+  .sim-step-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    color: var(--dim);
+    margin-left: 8px;
+  }
+
+  .sim-nav { display: flex; gap: 8px; margin-left: auto; }
+
+  .sim-nav-btn {
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .sim-nav-btn:hover:not(:disabled) { color: var(--text-bright); border-color: var(--dim); }
+  .sim-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── EXPERIMENT CARDS ── */
+  .exp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .exp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+  }
+  .exp-card:hover { border-color: rgba(200,205,216,0.3); }
+  .exp-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .exp-card.green::before { background: var(--green); }
+  .exp-card.red::before   { background: var(--red); }
+  .exp-card.amber::before { background: var(--amber); }
+  .exp-card.cyan::before  { background: var(--cyan); }
+
+  .exp-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .exp-card.green .exp-num { color: var(--green); }
+  .exp-card.red   .exp-num { color: var(--red); }
+  .exp-card.amber .exp-num { color: var(--amber); }
+  .exp-card.cyan  .exp-num { color: var(--cyan); }
+
+  .exp-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+
+  .method-badge {
+    font-family: 'D2Coding', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+  }
+  .method-badge.get  { color: var(--cyan);  background: var(--cyan-dim); }
+  .method-badge.post { color: var(--amber); background: var(--amber-dim); }
+
+  .exp-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+  }
+
+  .exp-obs {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+
+  .exp-tag {
+    display: inline-block;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: 6px;
+  }
+  .exp-card.green .exp-tag { color: var(--green); background: var(--green-dim); }
+  .exp-card.red   .exp-tag { color: var(--red);   background: var(--red-dim); }
+  .exp-card.amber .exp-tag { color: var(--amber); background: var(--amber-dim); }
+  .exp-card.cyan  .exp-tag { color: var(--cyan);  background: var(--cyan-dim); }
+
+  /* ── TRAP FLOW ── */
+  .trap-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .step-item {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    position: relative;
+  }
+
+  .step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 40px;
+    bottom: -12px;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .step-num-circle {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-item.normal   .step-num-circle { background: var(--green-dim);  color: var(--green);  border: 1px solid rgba(0,230,138,0.3); }
+  .step-item.danger   .step-num-circle { background: var(--red-dim);    color: var(--red);    border: 1px solid rgba(255,77,106,0.3); }
+  .step-item.caution  .step-num-circle { background: var(--amber-dim);  color: var(--amber);  border: 1px solid rgba(255,184,0,0.3); }
+  .step-item.info-step .step-num-circle { background: var(--cyan-dim); color: var(--cyan);   border: 1px solid rgba(0,212,255,0.3); }
+
+  .step-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    flex: 1;
+    margin-bottom: 12px;
+  }
+
+  .step-item.danger  .step-content { border-color: rgba(255,77,106,0.25); background: rgba(255,77,106,0.04); }
+  .step-item.caution .step-content { border-color: rgba(255,184,0,0.25);  background: rgba(255,184,0,0.04); }
+
+  .step-content h4 {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 5px;
+  }
+  .step-content p {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+  .step-content code {
+    font-family: 'D2Coding', monospace;
+    font-size: 10.5px;
+    color: var(--amber);
+    background: rgba(255,184,0,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: #0c0e14;
+    border-radius: 10px;
+    padding: 20px 22px;
+    font-family: 'D2Coding', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 12px 0;
+    border: 1px solid var(--border);
+  }
+  .code-block.cyan-border  { border-left: 3px solid var(--cyan); }
+  .code-block.amber-border { border-left: 3px solid var(--amber); }
+  .code-block.red-border   { border-left: 3px solid var(--red); }
+
+  .code-kw      { color: var(--purple); }
+  .code-ann     { color: var(--amber); }
+  .code-fn      { color: var(--cyan); }
+  .code-str     { color: var(--green); }
+  .code-comment { color: var(--dim); }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .compare-table th {
+    padding: 14px 18px;
+    text-align: left;
+    background: var(--void);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    color: var(--text-bright);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .compare-table th.required-col     { color: var(--cyan); }
+  .compare-table th.requires-new-col { color: var(--amber); }
+
+  .compare-table td {
+    padding: 13px 18px;
+    border-bottom: 1px solid rgba(42,47,66,0.5);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table tr:hover td       { background: rgba(255,255,255,0.02); }
+  .compare-table td:first-child    { color: var(--dim); font-weight: 500; white-space: nowrap; }
+  .compare-table td.good    { color: var(--green); }
+  .compare-table td.danger  { color: var(--red); }
+  .compare-table td.caution { color: var(--amber); }
+  .compare-table td.info    { color: var(--cyan); }
+
+  /* ── BEST PRACTICES ── */
+  .bp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .bp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    position: relative;
+  }
+
+  .bp-icon {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .bp-card h4 {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+  }
+  .bp-card p {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.7;
+  }
+
+  /* ── CLOSER ── */
+  .closer {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06) 0%, rgba(167,139,250,0.06) 50%, rgba(255,184,0,0.06) 100%);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 20px;
+    padding: 56px 48px;
+    text-align: center;
+    margin-top: 72px;
+  }
+
+  .closer-title {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--text-bright);
+    margin-bottom: 24px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+  }
+
+  .closer-title em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .closer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .closer-tag {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+  }
+
+  .closer-tag.highlight {
+    background: var(--cyan-dim);
+    border-color: rgba(0,212,255,0.3);
+    color: var(--cyan);
+  }
+
+  .closer-tag.amber {
+    background: var(--amber-dim);
+    border-color: rgba(255,184,0,0.3);
+    color: var(--amber);
+  }
+
+  .closer-tag.red {
+    background: var(--red-dim);
+    border-color: rgba(255,77,106,0.3);
+    color: var(--red);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .metrics-row   { grid-template-columns: repeat(2, 1fr); }
+    .concept-grid  { grid-template-columns: 1fr; }
+    .exp-grid      { grid-template-columns: repeat(2, 1fr); }
+    .bp-grid       { grid-template-columns: repeat(2, 1fr); }
+    .tx-canvas     { flex-direction: column; }
+  }
+
+  @media (max-width: 600px) {
+    .metrics-row   { grid-template-columns: 1fr 1fr; }
+    .exp-grid      { grid-template-columns: 1fr; }
+    .bp-grid       { grid-template-columns: 1fr; }
+    .masthead      { padding: 48px 0 40px; }
+    .section       { padding-top: 40px; }
+    .closer        { padding: 32px 20px; }
+    .sim-controls  { gap: 8px; }
+    .sim-btn       { font-size: 12px; padding: 8px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<div class="page-wrap">
+
+  <!-- ═══════════════════════════════════════════════
+       MASTHEAD
+  ═══════════════════════════════════════════════ -->
+  <div class="masthead">
+    <div class="masthead-tag">Lab 04 — Transaction Propagation</div>
+    <h1>REQUIRED vs REQUIRES_NEW<br><em>9가지 실험</em>으로 파헤치기</h1>
+    <p class="masthead-sub">
+      트랜잭션 전파 옵션의 동작 차이를 직접 관찰. UnexpectedRollbackException, 커넥션 풀 고갈, 데이터 불일치의 원인을 추적합니다.
+    </p>
+  </div>
+
+  <!-- Metrics Row -->
+  <div class="metrics-row">
+    <div class="metric-card cyan">
+      <div class="metric-label">총 실험 케이스</div>
+      <div class="metric-value">9</div>
+      <div class="metric-unit">실험 수</div>
+    </div>
+    <div class="metric-card blue">
+      <div class="metric-label">REQUIRED</div>
+      <div class="metric-value" style="font-size:24px; padding-top:6px;">기본값</div>
+      <div class="metric-unit">기존 TX에 참여</div>
+    </div>
+    <div class="metric-card amber">
+      <div class="metric-label">REQUIRES_NEW</div>
+      <div class="metric-value" style="font-size:24px; padding-top:6px;">독립</div>
+      <div class="metric-unit">항상 새 TX 생성</div>
+    </div>
+    <div class="metric-card red">
+      <div class="metric-label">핵심 위험</div>
+      <div class="metric-value" style="font-size:24px; padding-top:6px;">트랩</div>
+      <div class="metric-unit">rollback-only 마킹</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 01 — CORE CONCEPT
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label">Section 01 — Core Concept</div>
+    <h2 class="section-title">두 전파 옵션의 근본적 차이</h2>
+    <p class="section-desc">Spring이 트랜잭션 경계를 어떻게 결정하는가 — 커넥션 공유 vs 커넥션 분리</p>
+
+    <div class="concept-grid">
+      <!-- REQUIRED -->
+      <div class="concept-card required">
+        <div class="concept-card-tag">Propagation.REQUIRED</div>
+        <h3>기존 트랜잭션에 참여</h3>
+        <p>호출 스택에 활성 트랜잭션이 존재하면 그 트랜잭션에 합류합니다. 존재하지 않으면 새 트랜잭션을 시작합니다. Outer와 Inner는 동일한 DB 커넥션과 트랜잭션을 공유합니다.</p>
+        <div class="concept-diagram"><span style="color:var(--cyan)">// 기존 TX 있을 때</span>
+Outer TX ──────────────────────────────┐
+  │  <span style="color:var(--cyan)">conn-42, tx-A</span>                    │
+  └── Inner (REQUIRED) ────────────────┤
+        │  <span style="color:var(--cyan)">같은 conn-42, 같은 tx-A</span>     │
+        └────────────────────────────── COMMIT (tx-A)</div>
+
+        <div class="concept-diagram" style="margin-top:10px"><span style="color:var(--cyan)">// 기존 TX 없을 때</span>
+Inner (REQUIRED) ──────────────────────┐
+  │  <span style="color:var(--cyan)">새 conn, 새 tx</span>                  │
+  └─────────────────────────────────── COMMIT</div>
+      </div>
+
+      <!-- REQUIRES_NEW -->
+      <div class="concept-card requires-new">
+        <div class="concept-card-tag">Propagation.REQUIRES_NEW</div>
+        <h3>항상 새 독립 트랜잭션</h3>
+        <p>기존 트랜잭션을 <strong style="color:var(--amber)">suspend(일시 중단)</strong>하고, 완전히 새로운 커넥션과 트랜잭션을 시작합니다. Inner가 완료되면 Outer가 resume됩니다. 두 트랜잭션은 완전히 독립적입니다.</p>
+        <div class="concept-diagram"><span style="color:var(--amber)">// 기존 TX 있을 때</span>
+Outer TX ───── <span style="color:var(--dim)">[SUSPENDED]</span> ─────────────┐
+  │  <span style="color:var(--amber)">conn-42, tx-A (일시중단)</span>          │
+  └── Inner (REQUIRES_NEW) ────────┐   │
+        │  <span style="color:var(--amber)">새 conn-99, 새 tx-B</span>       │   │
+        └── COMMIT(tx-B) ──────────┘   │
+  <span style="color:var(--amber)">[RESUMED]</span> tx-A ─────────────────── COMMIT(tx-A)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 02 — INTERACTIVE SIMULATOR
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label purple">Section 02 — Interactive Simulator</div>
+    <h2 class="section-title">트랜잭션 전파 시뮬레이터</h2>
+    <p class="section-desc">시나리오를 선택하고 단계별로 실행하면서 트랜잭션의 상태 변화를 관찰하세요</p>
+
+    <div class="simulator-wrap">
+      <!-- Controls -->
+      <div class="sim-controls">
+        <button class="sim-btn active cyan" onclick="selectScenario('required')" id="btn-required">
+          REQUIRED (참여)
+        </button>
+        <button class="sim-btn" onclick="selectScenario('requires_new')" id="btn-requires_new">
+          REQUIRES_NEW (독립)
+        </button>
+        <button class="sim-btn" onclick="selectScenario('rollback_trap')" id="btn-rollback_trap">
+          REQUIRED 롤백 트랩
+        </button>
+      </div>
+
+      <!-- Diagram Stage -->
+      <div class="sim-stage">
+        <div class="tx-canvas" id="tx-canvas">
+          <!-- Outer TX -->
+          <div class="tx-area">
+            <div class="tx-area-label">Outer Method</div>
+            <div class="tx-box outer-default" id="outer-box">
+              <div class="tx-box-inner">
+                <div class="tx-box-name" id="outer-name">OUTER TX</div>
+                <div class="tx-box-id" id="outer-id">conn-42</div>
+                <div class="tx-box-status" id="outer-status">ACTIVE</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Arrow -->
+          <div class="tx-arrow" id="tx-arrow">
+            <span id="arrow-label">호출</span>
+            <span style="font-size:24px; color:#ffffff">&#8594;</span>
+          </div>
+
+          <!-- Inner TX -->
+          <div class="tx-area">
+            <div class="tx-area-label">Inner Method</div>
+            <div class="tx-box inner-joined" id="inner-box">
+              <div class="tx-box-inner">
+                <div class="tx-box-name" id="inner-name">INNER TX</div>
+                <div class="tx-box-id" id="inner-id">conn-42</div>
+                <div class="tx-box-status" id="inner-status">JOINED</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step dots + Nav -->
+      <div class="sim-step-indicator">
+        <div id="step-dots"></div>
+        <span class="sim-step-label" id="step-label">시나리오를 선택하세요</span>
+        <div class="sim-nav">
+          <button class="sim-nav-btn" id="btn-prev" onclick="prevStep()" disabled>&#9664; 이전</button>
+          <button class="sim-nav-btn" id="btn-next" onclick="nextStep()">다음 &#9654;</button>
+        </div>
+      </div>
+
+      <!-- Console -->
+      <div class="sim-console" id="sim-console">
+        <div class="console-line" style="animation-delay:0s">
+          <span class="console-ts">00:00:00.000</span>
+          <span class="console-level info">INFO</span>
+          <span class="console-msg">시뮬레이터 준비. 위에서 시나리오를 선택하세요.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 03 — 9 EXPERIMENT CARDS
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label">Section 03 — Experiments</div>
+    <h2 class="section-title">9가지 실험 목록</h2>
+    <p class="section-desc">각 실험은 트랜잭션 전파의 특정 동작을 검증합니다</p>
+
+    <div class="exp-grid">
+      <!-- 4-1 -->
+      <div class="exp-card green">
+        <div class="exp-num">4-1</div>
+        <div class="exp-header">
+          <span class="method-badge get">GET</span>
+          <span class="exp-title">REQUIRED 참여 확인</span>
+        </div>
+        <div class="exp-obs">Outer와 Inner의 트랜잭션 이름이 동일함을 확인. 두 메서드가 같은 물리 트랜잭션을 공유함을 증명.</div>
+        <span class="exp-tag">tx name 동일</span>
+      </div>
+
+      <!-- 4-2 -->
+      <div class="exp-card green">
+        <div class="exp-num">4-2</div>
+        <div class="exp-header">
+          <span class="method-badge get">GET</span>
+          <span class="exp-title">REQUIRED 새 TX 생성</span>
+        </div>
+        <div class="exp-obs">기존 트랜잭션 없이 Inner(REQUIRED) 직접 호출 시 새 트랜잭션이 생성됨을 확인.</div>
+        <span class="exp-tag">자동 생성</span>
+      </div>
+
+      <!-- 4-3 -->
+      <div class="exp-card green">
+        <div class="exp-num">4-3</div>
+        <div class="exp-header">
+          <span class="method-badge get">GET</span>
+          <span class="exp-title">REQUIRES_NEW 항상 새 TX</span>
+        </div>
+        <div class="exp-obs">Outer 안에서 Inner(REQUIRES_NEW) 호출 시 Outer와 다른 트랜잭션 이름, 다른 커넥션 ID가 로깅됨.</div>
+        <span class="exp-tag">완전 독립</span>
+      </div>
+
+      <!-- 4-4 -->
+      <div class="exp-card red">
+        <div class="exp-num">4-4</div>
+        <div class="exp-header">
+          <span class="method-badge post">POST</span>
+          <span class="exp-title">REQUIRED 롤백 트랩</span>
+        </div>
+        <div class="exp-obs">Inner(REQUIRED)에서 예외 발생 → rollback-only 마킹 → Outer가 catch해도 UnexpectedRollbackException 발생!</div>
+        <span class="exp-tag">UnexpectedRollbackException</span>
+      </div>
+
+      <!-- 4-5 -->
+      <div class="exp-card green">
+        <div class="exp-num">4-5</div>
+        <div class="exp-header">
+          <span class="method-badge post">POST</span>
+          <span class="exp-title">REQUIRES_NEW Inner 예외 격리</span>
+        </div>
+        <div class="exp-obs">Inner(REQUIRES_NEW)에서 예외 발생 후 Outer가 catch → Inner만 롤백, Outer의 데이터는 정상 커밋됨.</div>
+        <span class="exp-tag">예외 격리</span>
+      </div>
+
+      <!-- 4-6 -->
+      <div class="exp-card amber">
+        <div class="exp-num">4-6</div>
+        <div class="exp-header">
+          <span class="method-badge post">POST</span>
+          <span class="exp-title">Outer 실패 후 Inner 생존</span>
+        </div>
+        <div class="exp-obs">Inner(REQUIRES_NEW) 커밋 후 Outer 예외 발생 → Outer 롤백되어도 Inner 데이터는 이미 커밋되어 DB에 존재.</div>
+        <span class="exp-tag">데이터 불일치 주의</span>
+      </div>
+
+      <!-- 4-7 -->
+      <div class="exp-card red">
+        <div class="exp-num">4-7</div>
+        <div class="exp-header">
+          <span class="method-badge post">POST</span>
+          <span class="exp-title">UnexpectedRollbackException 심화</span>
+        </div>
+        <div class="exp-obs">3가지 시나리오: checked/unchecked 예외, noRollbackFor 설정 등 rollback-only 마킹의 세부 조건을 탐구.</div>
+        <span class="exp-tag">3가지 시나리오</span>
+      </div>
+
+      <!-- 4-8 -->
+      <div class="exp-card cyan">
+        <div class="exp-num">4-8</div>
+        <div class="exp-header">
+          <span class="method-badge get">GET</span>
+          <span class="exp-title">DB 커넥션 분리 확인</span>
+        </div>
+        <div class="exp-obs">REQUIRES_NEW 사용 시 p6spy 로그에서 두 개의 서로 다른 커넥션 ID가 동시에 활성 상태임을 확인.</div>
+        <span class="exp-tag">커넥션 격리</span>
+      </div>
+
+      <!-- 4-9 -->
+      <div class="exp-card red">
+        <div class="exp-num">4-9</div>
+        <div class="exp-header">
+          <span class="method-badge post">POST</span>
+          <span class="exp-title">커넥션 풀 고갈</span>
+        </div>
+        <div class="exp-obs">REQUIRES_NEW를 중첩 루프에서 사용 시 커넥션 풀이 고갈되어 HikariPool timeout 발생. 실무 위험 시연.</div>
+        <span class="exp-tag">풀 고갈 위험</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 04 — TRAP DEEP DIVE
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label red">Section 04 — Deep Dive</div>
+    <h2 class="section-title">실험 4-4: 롤백 트랩 단계별 분석</h2>
+    <p class="section-desc">가장 많은 개발자를 혼란에 빠뜨리는 UnexpectedRollbackException의 발생 메커니즘</p>
+
+    <div class="trap-flow">
+      <div class="step-item normal">
+        <div class="step-num-circle">1</div>
+        <div class="step-content">
+          <h4>Outer 메서드 시작 — 새 트랜잭션 생성</h4>
+          <p>Spring TX Interceptor가 새 물리 트랜잭션을 시작. HikariPool에서 <code>conn-42</code> 획득. 행 A 삽입.</p>
+          <div class="code-block cyan-border"><span class="code-comment">// TX Interceptor가 처리</span>
+<span class="code-ann">@Transactional</span> <span class="code-comment">// REQUIRED (기본값)</span>
+<span class="code-kw">fun</span> <span class="code-fn">outerMethod</span>() {
+    repo.save(rowA) <span class="code-comment">// conn-42, tx-A에서 실행</span>
+    innerMethod()  <span class="code-comment">// 내부 호출</span>
+}</div>
+        </div>
+      </div>
+
+      <div class="step-item normal">
+        <div class="step-num-circle">2</div>
+        <div class="step-content">
+          <h4>Inner 메서드 — 기존 트랜잭션에 참여</h4>
+          <p>Inner는 <code>REQUIRED</code>이므로 Outer의 <code>tx-A</code>에 합류. 별도 커넥션 없음. 행 B 삽입 후 RuntimeException 발생.</p>
+          <div class="code-block cyan-border"><span class="code-ann">@Transactional</span> <span class="code-comment">// REQUIRED — tx-A에 참여</span>
+<span class="code-kw">fun</span> <span class="code-fn">innerMethod</span>() {
+    repo.save(rowB) <span class="code-comment">// 같은 conn-42, tx-A</span>
+    <span class="code-kw">throw</span> RuntimeException(<span class="code-str">"Inner 예외!"</span>)
+}</div>
+        </div>
+      </div>
+
+      <div class="step-item danger">
+        <div class="step-num-circle">3</div>
+        <div class="step-content">
+          <h4 style="color:var(--red)">TX Interceptor — rollback-only 마킹!</h4>
+          <p>예외가 Inner TX 경계를 벗어남. TX Interceptor는 <strong style="color:var(--red)">현재 물리 트랜잭션(tx-A)에 rollback-only 플래그를 설정</strong>. 이 시점에서 tx-A의 운명은 결정됨.</p>
+          <div class="code-block red-border"><span class="code-comment">// TransactionAspectSupport 내부 동작</span>
+txInfo.getTransactionManager()
+    .rollback(txInfo.getTransactionStatus())
+<span class="code-comment">// 논리 TX(Inner)는 참여자이므로:</span>
+<span class="code-comment">// → 물리 롤백 X, rollback-only 마킹 O</span>
+status.setRollbackOnly() <span class="code-comment">// ← 핵심!</span></div>
+        </div>
+      </div>
+
+      <div class="step-item caution">
+        <div class="step-num-circle">4</div>
+        <div class="step-content">
+          <h4 style="color:var(--amber)">Outer가 예외를 catch — 하지만 이미 늦었다</h4>
+          <p>Outer는 try-catch로 Inner의 예외를 잡아 처리. 개발자는 정상 흐름이라고 생각하지만, tx-A에는 이미 rollback-only 플래그가 설정되어 있음.</p>
+          <div class="code-block amber-border"><span class="code-kw">try</span> {
+    innerMethod()
+} <span class="code-kw">catch</span> (e: RuntimeException) {
+    log.warn(<span class="code-str">"예외 처리 완료. 계속 진행..."</span>)
+    <span class="code-comment">// ← 개발자는 괜찮다고 생각!</span>
+    <span class="code-comment">// ← 하지만 tx-A는 이미 rollback-only!</span>
+}</div>
+        </div>
+      </div>
+
+      <div class="step-item danger">
+        <div class="step-num-circle">5</div>
+        <div class="step-content">
+          <h4 style="color:var(--red)">Outer 커밋 시도 → UnexpectedRollbackException!</h4>
+          <p>Outer 메서드 종료 시 TX Interceptor가 <code>commit()</code> 호출. TransactionManager가 rollback-only 플래그를 발견하고 실제로는 롤백 수행 후 예외를 던짐. 행 A, B 모두 롤백됨.</p>
+          <div class="code-block red-border"><span class="code-comment">// AbstractPlatformTransactionManager</span>
+<span class="code-kw">if</span> (status.isRollbackOnly()) {
+    processRollback(status, <span class="code-kw">false</span>)
+    <span class="code-comment">// unexpected=true → 예외 발생!</span>
+    <span class="code-kw">throw</span> UnexpectedRollbackException(
+        <span class="code-str">"Transaction silently rolled back"</span>)
+}
+<span class="code-comment">// 결과: 행 A, 행 B 모두 DB에서 사라짐</span></div>
+        </div>
+      </div>
+
+      <div class="step-item danger">
+        <div class="step-num-circle">6</div>
+        <div class="step-content">
+          <h4 style="color:var(--red)">최종 결과: 전체 롤백</h4>
+          <p>Outer가 try-catch로 예외를 잡았음에도 불구하고, 행 A와 행 B 모두 데이터베이스에서 롤백됨. 애플리케이션은 저장 성공이라고 생각하지만 DB에는 아무것도 없음.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 05 — SUMMARY TABLE
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label amber">Section 05 — Comparison</div>
+    <h2 class="section-title">REQUIRED vs REQUIRES_NEW 비교표</h2>
+    <p class="section-desc">두 전파 옵션의 핵심 차이를 모든 시나리오에 걸쳐 정리</p>
+
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>비교 항목</th>
+            <th class="required-col">REQUIRED</th>
+            <th class="requires-new-col">REQUIRES_NEW</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>기존 TX 존재 시</td>
+            <td class="info">기존 TX에 참여 (같은 커넥션)</td>
+            <td class="caution">기존 TX suspend → 새 TX 시작</td>
+          </tr>
+          <tr>
+            <td>기존 TX 없을 시</td>
+            <td class="info">새 TX 생성</td>
+            <td class="info">새 TX 생성</td>
+          </tr>
+          <tr>
+            <td>DB 커넥션</td>
+            <td class="good">1개 (공유)</td>
+            <td class="caution">2개 (각각 독립)</td>
+          </tr>
+          <tr>
+            <td>Inner 예외 → Outer catch 시</td>
+            <td class="danger">rollback-only 마킹 → Outer 커밋 시 UnexpectedRollbackException</td>
+            <td class="good">Inner만 롤백, Outer 정상 커밋 가능</td>
+          </tr>
+          <tr>
+            <td>Outer 예외 → Inner 데이터</td>
+            <td class="danger">함께 롤백 (같은 TX)</td>
+            <td class="caution">Inner는 이미 커밋됨 (독립 TX) — 데이터 불일치 가능</td>
+          </tr>
+          <tr>
+            <td>커넥션 풀 영향</td>
+            <td class="good">영향 없음 (1커넥션)</td>
+            <td class="danger">커넥션 2개 동시 사용 → 중첩 루프 시 풀 고갈 위험</td>
+          </tr>
+          <tr>
+            <td>트랜잭션 격리</td>
+            <td class="info">완전 공유 — 운명 공동체</td>
+            <td class="good">완전 독립 — 각자 commit/rollback</td>
+          </tr>
+          <tr>
+            <td>대표 사용 사례</td>
+            <td class="info">일반 비즈니스 로직 (기본값)</td>
+            <td class="caution">감사 로그, 알림 발송, 이력 저장</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 06 — BEST PRACTICES
+  ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="sec-label green">Section 06 — Best Practices</div>
+    <h2 class="section-title">실무 적용 가이드</h2>
+    <p class="section-desc">트랜잭션 전파 옵션을 안전하게 사용하기 위한 핵심 원칙</p>
+
+    <div class="bp-grid">
+      <div class="bp-card">
+        <span class="bp-icon">🛡️</span>
+        <h4>REQUIRED를 기본값으로</h4>
+        <p>명시적 이유 없이 REQUIRES_NEW를 사용하지 마세요. REQUIRED는 단일 원자적 작업을 보장하며 커넥션 효율이 높습니다.</p>
+      </div>
+      <div class="bp-card">
+        <span class="bp-icon">⚠️</span>
+        <h4>try-catch 후 커밋 가정 금지</h4>
+        <p>REQUIRED Inner에서 예외를 catch했더라도 트랜잭션은 이미 rollback-only 상태일 수 있습니다. 예외 전파 경로를 항상 추적하세요.</p>
+      </div>
+      <div class="bp-card">
+        <span class="bp-icon">🔌</span>
+        <h4>REQUIRES_NEW와 커넥션 풀</h4>
+        <p>REQUIRES_NEW는 동시에 커넥션을 2개 사용합니다. 중첩이 깊거나 루프 안에서 사용하면 커넥션 풀이 고갈될 수 있습니다.</p>
+      </div>
+      <div class="bp-card">
+        <span class="bp-icon">📋</span>
+        <h4>REQUIRES_NEW의 올바른 사용 사례</h4>
+        <p>메인 로직 실패와 무관하게 반드시 저장되어야 하는 감사 로그, 실패 이력, 알림 발송 등에 적합합니다.</p>
+      </div>
+      <div class="bp-card">
+        <span class="bp-icon">🔍</span>
+        <h4>데이터 일관성 검토</h4>
+        <p>REQUIRES_NEW 사용 시 Outer 롤백 후 Inner 데이터가 남을 수 있습니다. 이 시나리오에서 데이터 일관성이 허용되는지 반드시 검토하세요.</p>
+      </div>
+      <div class="bp-card">
+        <span class="bp-icon">🧪</span>
+        <h4>p6spy로 커넥션 확인</h4>
+        <p>REQUIRES_NEW 사용 시 p6spy 로그에서 두 개의 커넥션 ID를 확인하세요. 예상과 다른 커넥션 패턴은 전파 설정 오류의 신호입니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       CLOSER
+  ═══════════════════════════════════════════════ -->
+  <div class="closer">
+    <div class="closer-title">
+      <em>REQUIRED가 기본값인 이유를 이해하고,</em><br>
+      REQUIRES_NEW는 신중하게 사용하라
+    </div>
+    <div class="closer-tags">
+      <span class="closer-tag highlight">REQUIRED 기본값</span>
+      <span class="closer-tag highlight">rollback-only 마킹</span>
+      <span class="closer-tag amber">REQUIRES_NEW 독립 커밋</span>
+      <span class="closer-tag red">UnexpectedRollbackException</span>
+      <span class="closer-tag">커넥션 풀 고갈 방지</span>
+      <span class="closer-tag">감사 로그 패턴</span>
+      <span class="closer-tag">9가지 실험 검증</span>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<script>
+// ═══════════════════════════════════════════════
+// SIMULATOR ENGINE
+// ═══════════════════════════════════════════════
+
+const scenarios = {
+  required: {
+    label: 'REQUIRED — 트랜잭션 참여',
+    color: 'cyan',
+    steps: [
+      {
+        label: '초기 상태',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined hidden', name: 'INNER TX', id: '---', status: '대기' },
+        arrow: { show: false, label: '호출 전' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info',  msg: 'Outer 메서드 시작' },
+          { ts: '10:00:00.002', lvl: 'debug', msg: 'TransactionInterceptor: 새 트랜잭션 생성 (REQUIRED)' },
+          { ts: '10:00:00.003', lvl: 'info',  msg: 'HikariPool-1: conn-42 획득' },
+        ]
+      },
+      {
+        label: 'Inner 호출',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'JOINED' },
+        arrow: { show: true, label: '참여' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'info',  msg: 'Inner 메서드 시작 (Propagation.REQUIRED)' },
+          { ts: '10:00:00.011', lvl: 'debug', msg: 'TransactionInterceptor: 기존 트랜잭션 참여 (conn-42)' },
+          { ts: '10:00:00.012', lvl: 'info',  msg: '→ Outer TX와 동일한 conn-42, 동일한 tx-A 사용' },
+        ]
+      },
+      {
+        label: 'Inner 완료',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'PARTICIPATED' },
+        arrow: { show: true, label: '참여' },
+        dotState: 'done',
+        logs: [
+          { ts: '10:00:00.020', lvl: 'info',  msg: 'Inner 메서드 완료' },
+          { ts: '10:00:00.021', lvl: 'debug', msg: 'TransactionInterceptor: 참여자 — 물리 커밋 없음' },
+          { ts: '10:00:00.022', lvl: 'info',  msg: '→ 물리 트랜잭션(tx-A)은 아직 열려 있음' },
+        ]
+      },
+      {
+        label: '최종 커밋',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'COMMITTED' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'COMMITTED' },
+        arrow: { show: true, label: '함께 커밋' },
+        dotState: 'done',
+        logs: [
+          { ts: '10:00:00.030', lvl: 'info',  msg: 'Outer 메서드 완료' },
+          { ts: '10:00:00.031', lvl: 'debug', msg: 'TransactionInterceptor: 물리 트랜잭션 커밋 (tx-A)' },
+          { ts: '10:00:00.032', lvl: 'success', msg: '✓ Outer + Inner 데이터 모두 커밋 완료' },
+          { ts: '10:00:00.033', lvl: 'info',  msg: 'HikariPool-1: conn-42 반환' },
+        ]
+      }
+    ]
+  },
+
+  requires_new: {
+    label: 'REQUIRES_NEW — 독립 트랜잭션',
+    color: 'amber',
+    steps: [
+      {
+        label: '초기 상태',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-new hidden', name: 'INNER TX', id: '---', status: '대기' },
+        arrow: { show: false, label: '호출 전' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info',  msg: 'Outer 메서드 시작' },
+          { ts: '10:00:00.002', lvl: 'debug', msg: 'TransactionInterceptor: 새 트랜잭션 생성 (REQUIRED)' },
+          { ts: '10:00:00.003', lvl: 'info',  msg: 'HikariPool-1: conn-42 획득' },
+        ]
+      },
+      {
+        label: 'Outer 일시 중단',
+        outer: { cls: 'outer-suspended', name: 'OUTER TX', id: 'conn-42', status: 'SUSPENDED' },
+        inner: { cls: 'inner-new', name: 'INNER TX', id: 'conn-99', status: 'ACTIVE' },
+        arrow: { show: true, label: '새 TX' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'warn',  msg: 'Inner 메서드 시작 (Propagation.REQUIRES_NEW)' },
+          { ts: '10:00:00.011', lvl: 'debug', msg: '→ Outer TX suspend: conn-42 일시 중단' },
+          { ts: '10:00:00.012', lvl: 'info',  msg: 'HikariPool-1: conn-99 획득 (새 커넥션!)' },
+          { ts: '10:00:00.013', lvl: 'debug', msg: '새 트랜잭션 tx-B 시작 (conn-99)' },
+        ]
+      },
+      {
+        label: 'Inner 커밋',
+        outer: { cls: 'outer-suspended', name: 'OUTER TX', id: 'conn-42', status: 'SUSPENDED' },
+        inner: { cls: 'inner-new', name: 'INNER TX', id: 'conn-99', status: 'COMMITTED' },
+        arrow: { show: true, label: '독립 커밋' },
+        dotState: 'done',
+        logs: [
+          { ts: '10:00:00.020', lvl: 'success', msg: '✓ Inner TX (tx-B) 독립 커밋 완료' },
+          { ts: '10:00:00.021', lvl: 'info',  msg: 'HikariPool-1: conn-99 반환' },
+          { ts: '10:00:00.022', lvl: 'debug', msg: '→ Outer TX resume: conn-42 재활성화' },
+        ]
+      },
+      {
+        label: 'Outer 재개 및 커밋',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'COMMITTED' },
+        inner: { cls: 'inner-new', name: 'INNER TX', id: 'conn-99', status: 'COMMITTED' },
+        arrow: { show: true, label: '독립 커밋' },
+        dotState: 'done',
+        logs: [
+          { ts: '10:00:00.030', lvl: 'info',  msg: 'Outer TX (tx-A) resume 완료' },
+          { ts: '10:00:00.031', lvl: 'success', msg: '✓ Outer TX 커밋 완료 (독립적)' },
+          { ts: '10:00:00.032', lvl: 'info',  msg: 'HikariPool-1: conn-42 반환' },
+          { ts: '10:00:00.033', lvl: 'info',  msg: '→ 두 TX가 각각 독립적으로 커밋됨' },
+        ]
+      }
+    ]
+  },
+
+  rollback_trap: {
+    label: 'REQUIRED 롤백 트랩',
+    color: 'red',
+    steps: [
+      {
+        label: '초기 상태',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined hidden', name: 'INNER TX', id: '---', status: '대기' },
+        arrow: { show: false, label: '호출 전' },
+        dotState: 'active',
+        logs: [
+          { ts: '10:00:00.001', lvl: 'info',  msg: 'Outer 메서드 시작' },
+          { ts: '10:00:00.002', lvl: 'info',  msg: '행 A 삽입: INSERT INTO table VALUES (A)' },
+          { ts: '10:00:00.003', lvl: 'debug', msg: 'conn-42, tx-A — 진행 중' },
+        ]
+      },
+      {
+        label: 'Inner 참여 + 예외',
+        outer: { cls: 'outer-default', name: 'OUTER TX', id: 'conn-42', status: 'ACTIVE' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'EXCEPTION!' },
+        arrow: { show: true, label: '참여' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.010', lvl: 'info',  msg: 'Inner 메서드 시작 — tx-A 참여' },
+          { ts: '10:00:00.011', lvl: 'info',  msg: '행 B 삽입: INSERT INTO table VALUES (B)' },
+          { ts: '10:00:00.012', lvl: 'error', msg: '!!!  RuntimeException 발생!' },
+        ]
+      },
+      {
+        label: 'rollback-only 마킹',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLBACK-ONLY' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'EXCEPTION!' },
+        arrow: { show: true, label: '⚠️ 마킹' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.013', lvl: 'error', msg: 'TX Interceptor: Inner 예외로 TX 오염' },
+          { ts: '10:00:00.014', lvl: 'error', msg: '→ status.setRollbackOnly() 호출!' },
+          { ts: '10:00:00.015', lvl: 'warn',  msg: 'tx-A에 rollback-only 플래그 설정됨' },
+          { ts: '10:00:00.016', lvl: 'warn',  msg: 'Outer가 catch 해도 이미 늦었음...' },
+        ]
+      },
+      {
+        label: 'Outer catch — 하지만 이미 늦음',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLBACK-ONLY' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'CAUGHT' },
+        arrow: { show: true, label: '⚠️ 마킹' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.020', lvl: 'warn',  msg: 'Outer: catch(RuntimeException) — 예외 처리 완료' },
+          { ts: '10:00:00.021', lvl: 'warn',  msg: '개발자 생각: "이제 커밋하면 되겠지?"' },
+          { ts: '10:00:00.022', lvl: 'error', msg: '현실: tx-A는 이미 rollback-only 상태!' },
+        ]
+      },
+      {
+        label: 'UnexpectedRollbackException!',
+        outer: { cls: 'rollback-only', name: 'OUTER TX', id: 'conn-42', status: 'ROLLED BACK' },
+        inner: { cls: 'inner-joined', name: 'INNER TX', id: 'conn-42', status: 'ROLLED BACK' },
+        arrow: { show: true, label: '전부 롤백' },
+        dotState: 'error',
+        logs: [
+          { ts: '10:00:00.030', lvl: 'error', msg: 'AbstractPlatformTransactionManager.commit()' },
+          { ts: '10:00:00.031', lvl: 'error', msg: '→ if(status.isRollbackOnly()) processRollback()' },
+          { ts: '10:00:00.032', lvl: 'error', msg: '!!! UnexpectedRollbackException 발생!' },
+          { ts: '10:00:00.033', lvl: 'error', msg: 'Transaction silently rolled back' },
+          { ts: '10:00:00.034', lvl: 'error', msg: '→ 행 A, 행 B 모두 롤백됨. DB에 아무것도 없음.' },
+        ]
+      }
+    ]
+  }
+};
+
+let currentScenario = 'required';
+let currentStep = 0;
+
+function selectScenario(name) {
+  currentScenario = name;
+  currentStep = 0;
+  document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active', 'cyan', 'amber', 'red'));
+  const btn = document.getElementById('btn-' + name);
+  const color = scenarios[name].color;
+  btn.classList.add('active', color);
+  renderStep();
+}
+
+function renderStep() {
+  const sc = scenarios[currentScenario];
+  const step = sc.steps[currentStep];
+
+  // Update boxes
+  applyBox('outer-box', 'outer-name', 'outer-id', 'outer-status', step.outer);
+  applyBox('inner-box', 'inner-name', 'inner-id', 'inner-status', step.inner);
+
+  // Update arrow
+  const arrow = document.getElementById('tx-arrow');
+  if (step.arrow.show) {
+    arrow.classList.remove('hidden');
+    document.getElementById('arrow-label').textContent = step.arrow.label;
+  } else {
+    arrow.classList.add('hidden');
+  }
+
+  // Update step dots
+  renderDots(sc.steps.length, step.dotState);
+
+  // Update label
+  document.getElementById('step-label').textContent = step.label;
+
+  // Update console
+  renderConsole(step.logs);
+
+  // Nav buttons
+  document.getElementById('btn-prev').disabled = currentStep === 0;
+  document.getElementById('btn-next').disabled = currentStep === sc.steps.length - 1;
+}
+
+function applyBox(boxId, nameId, idId, statusId, cfg) {
+  const box = document.getElementById(boxId);
+  box.className = 'tx-box';
+  cfg.cls.split(' ').forEach(c => { if(c) box.classList.add(c); });
+  document.getElementById(nameId).textContent = cfg.name;
+  document.getElementById(idId).textContent = cfg.id;
+  document.getElementById(statusId).textContent = cfg.status;
+}
+
+function renderDots(count, state) {
+  const dotsEl = document.getElementById('step-dots');
+  dotsEl.innerHTML = '';
+  dotsEl.style.display = 'flex';
+  dotsEl.style.gap = '6px';
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement('div');
+    d.className = 'sim-step-dot';
+    if (i < currentStep) d.classList.add('done');
+    else if (i === currentStep) {
+      d.classList.add(state === 'error' ? 'error' : 'active');
+    }
+    d.onclick = (function(idx) { return function() { currentStep = idx; renderStep(); }; })(i);
+    dotsEl.appendChild(d);
+  }
+}
+
+function renderConsole(logs) {
+  const el = document.getElementById('sim-console');
+  el.innerHTML = '';
+  logs.forEach((log, i) => {
+    const line = document.createElement('div');
+    line.className = 'console-line';
+    line.style.animationDelay = (i * 80) + 'ms';
+    line.innerHTML = `<span class="console-ts">${log.ts}</span><span class="console-level ${log.lvl}">${log.lvl.toUpperCase()}</span><span class="console-msg">${log.msg}</span>`;
+    el.appendChild(line);
+  });
+}
+
+function nextStep() {
+  const sc = scenarios[currentScenario];
+  if (currentStep < sc.steps.length - 1) {
+    currentStep++;
+    renderStep();
+  }
+}
+
+function prevStep() {
+  if (currentStep > 0) {
+    currentStep--;
+    renderStep();
+  }
+}
+
+// Initialize
+selectScenario('required');
+</script>
+</body>
+</html>

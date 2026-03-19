@@ -154,7 +154,7 @@ class Lab04Controller(
     fun testConnectionPoolExhaustion(): ResponseEntity<ApiResponse<PropagationResult>> {
         log.info("")
         log.info("╔════════════════════════════════════════════════════════════╗")
-        log.info("║  실험 4-9: 커넥션 풀 고갈 시뮬레이션 (약 30초 소요)            ║")
+        log.info("║  실험 4-9: 커넥션 풀 고갈 시뮬레이션 (connectionTimeout만큼 소요) ║")
         log.info("╚════════════════════════════════════════════════════════════╝")
         log.info("")
 
