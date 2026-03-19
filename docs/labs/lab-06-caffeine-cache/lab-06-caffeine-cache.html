@@ -406,10 +406,11 @@ body {
   display: grid;
   grid-template-columns: 160px 1fr 160px;
   gap: 0;
-  align-items: center;
+  align-items: start;
   min-height: 260px;
   position: relative;
   margin-bottom: 24px;
+  padding-top: 20px;
 }
 
 /* Zones */
@@ -541,7 +542,7 @@ body {
   text-transform: uppercase;
 }
 
-.cache-entries { display: flex; flex-direction: column; gap: 6px; }
+.cache-entries { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
 
 .cache-entry {
   display: grid;
