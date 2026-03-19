@@ -243,20 +243,40 @@ body {
 
 .flow-chain {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 0;
-  flex-wrap: wrap;
-  justify-content: center;
   margin-bottom: 40px;
+}
+
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
+.flow-row-connector {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;    /* fill the same width as the sibling .flow-row elements */
+  color: var(--cyan);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 22px 2px 0; /* right-pad so ↓ sits over the center of the last node */
+  opacity: 0.7;
 }
 
 .flow-node {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px 18px;
+  padding: 10px 14px;
   text-align: center;
   position: relative;
+  white-space: nowrap;
 }
 
 .flow-node .node-label {
@@ -274,10 +294,11 @@ body {
 }
 
 .flow-arrow {
-  color: #ffffff;
+  color: var(--cyan);
   font-size: 18px;
-  padding: 0 8px;
+  padding: 0 6px;
   flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .paths-row {
@@ -1181,34 +1202,38 @@ code {
 
     <div class="abstraction-flow">
       <div class="flow-chain">
-        <div class="flow-node">
-          <div class="node-label">@Cacheable</div>
-          <div class="node-sub">어노테이션</div>
+        <div class="flow-row">
+          <div class="flow-node">
+            <div class="node-label">@Cacheable</div>
+            <div class="node-sub">어노테이션</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">
+            <div class="node-label">CGLIB Proxy</div>
+            <div class="node-sub">메서드 인터셉트</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">
+            <div class="node-label">CacheInterceptor</div>
+            <div class="node-sub">AOP Advice</div>
+          </div>
         </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node">
-          <div class="node-label">CGLIB Proxy</div>
-          <div class="node-sub">메서드 인터셉트</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node">
-          <div class="node-label">CacheInterceptor</div>
-          <div class="node-sub">AOP Advice</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node">
-          <div class="node-label">CacheAspectSupport</div>
-          <div class="node-sub">HIT / MISS 판단</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node">
-          <div class="node-label">CacheManager</div>
-          <div class="node-sub">CaffeineCacheManager</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node">
-          <div class="node-label">CaffeineCache</div>
-          <div class="node-sub">com.github.benmanes</div>
+        <div class="flow-row-connector">↓</div>
+        <div class="flow-row">
+          <div class="flow-node">
+            <div class="node-label">CaffeineCache</div>
+            <div class="node-sub">com.github.benmanes</div>
+          </div>
+          <div class="flow-arrow">←</div>
+          <div class="flow-node">
+            <div class="node-label">CacheManager</div>
+            <div class="node-sub">CaffeineCacheManager</div>
+          </div>
+          <div class="flow-arrow">←</div>
+          <div class="flow-node">
+            <div class="node-label">CacheAspectSupport</div>
+            <div class="node-sub">HIT / MISS 판단</div>
+          </div>
         </div>
       </div>
 
