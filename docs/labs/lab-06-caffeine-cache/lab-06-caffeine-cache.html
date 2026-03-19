@@ -160,7 +160,7 @@ body {
   font-family: 'Noto Sans KR', sans-serif;
   font-size: 14px;
   color: var(--dim);
-  max-width: 620px;
+  max-width: 800px;
   margin-bottom: 32px;
   line-height: 1.7;
 }
@@ -1209,7 +1209,7 @@ code {
   <div class="section">
     <div class="sec-label">Section 01</div>
     <div class="section-title">Caffeine Cache란?</div>
-    <p class="section-sub">Java 최고 성능의 로컬 캐시. Window TinyLFU로 높은 히트율을 보장한다.</p>
+    <p class="section-sub">Java 진영에서 가장 빠른 로컬 캐시 라이브러리로, Window TinyLFU 퇴거 알고리즘으로 높은 히트율을 보장한다.</p>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:24px;">
       <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px;">
@@ -1450,6 +1450,19 @@ code {
     <div class="sec-label">Section 04</div>
     <div class="section-title">Window TinyLFU 알고리즘</div>
     <p class="section-sub">Caffeine이 LRU보다 높은 히트율을 달성하는 이유 — 빈도(frequency) + 최근성(recency)을 동시에 고려.</p>
+
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; margin-bottom:28px; line-height:1.8;">
+      <h3 style="font-family:'Noto Sans KR',sans-serif; font-size:14px; font-weight:700; color:var(--cyan); margin-bottom:12px;">Window TinyLFU란?</h3>
+      <p style="font-size:13px; color:var(--text); margin-bottom:12px;">
+        전통적인 캐시 퇴거 알고리즘인 LRU(Least Recently Used)는 최근성만 고려하고, LFU(Least Frequently Used)는 빈도만 고려한다. 두 방식 모두 한계가 있다. LRU는 한 번 스캔된 대량 데이터가 자주 쓰는 데이터를 밀어내고, LFU는 과거에 자주 쓰였지만 더 이상 쓰이지 않는 데이터가 자리를 차지한다.
+      </p>
+      <p style="font-size:13px; color:var(--text); margin-bottom:12px;">
+        Window TinyLFU는 이 둘을 결합한다. 새 항목은 먼저 작은 <strong style="color:var(--cyan);">Admission Window</strong>(~1%)에 들어가고, 여기서 살아남으면 <strong style="color:var(--amber);">Probationary</strong> 영역으로 이동한다. 이때 TinyLFU 필터가 새 항목과 퇴거 후보의 접근 빈도를 비교하여, 빈도가 낮은 쪽을 퇴거한다.
+      </p>
+      <p style="font-size:13px; color:var(--text); margin:0;">
+        빈도 추적에는 <strong style="color:var(--purple);">4-bit CountMinSketch</strong>를 사용한다. 항목당 4비트만 사용하므로 메모리 오버헤드가 극히 작고, O(1) 시간에 빈도를 조회할 수 있다. 주기적으로 카운터를 절반으로 감소시켜(aging) 오래된 빈도가 과대 평가되는 것을 방지한다.
+      </p>
+    </div>
 
     <div class="tinylfu-visual">
       <div class="tinylfu-stages">
