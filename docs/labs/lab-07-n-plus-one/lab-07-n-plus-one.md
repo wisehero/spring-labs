@@ -121,7 +121,7 @@ Hibernate 처리:
 **DISTINCT가 필요한 이유:**
 - JOIN 결과는 카테시안 곱 → Team 1이 Member 3명이면 Team 1이 3행 반복
 - DISTINCT가 없으면 `teams` 리스트에 동일 Team이 3번 포함됨
-- Hibernate 6+에서는 `PASS_DISTINCT_THROUGH` 힌트가 기본 적용되어 SQL에는 DISTINCT 미포함, Hibernate 레벨에서만 중복 제거
+- Hibernate 6+에서는 `PASS_DISTINCT_THROUGH` 힌트가 **삭제**되었고, JPQL의 DISTINCT는 항상 SQL에 전달됨. 단, JOIN FETCH 시에는 DISTINCT를 명시하지 않아도 Hibernate가 자동으로 부모 엔티티 중복을 제거함
 
 - **예상 결과**: SQL 실행 횟수 = 1
 - **의미**: 가장 널리 사용되는 N+1 해결책. INNER JOIN이므로 members가 없는 Team은 제외됨

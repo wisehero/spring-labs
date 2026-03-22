@@ -55,7 +55,7 @@ Caffeine은 최신 퇴거 알고리즘인 **Window TinyLFU**를 사용한다:
 | Probationary Segment | ~20% | 접근 빈도를 관찰하는 대기 구역 |
 | Protected Segment | ~80% | 자주 접근되는 핫 데이터 |
 
-- **TinyLFU**: 4-bit CountMinSketch로 접근 빈도를 O(1) 공간에 추적
+- **TinyLFU**: 4-bit CountMinSketch로 접근 빈도를 추적 (엔트리당 8바이트, 캐시 크기에 비례하는 O(n) 공간)
 - **퇴거 결정**: 새 항목 vs 퇴거 후보의 빈도를 비교하여 결정
 - **장점**: LRU보다 높은 hit rate, LFU보다 낮은 메모리 오버헤드
 
@@ -150,7 +150,7 @@ stats() 호출 시:
 ```
 
 - **예상 결과**: 1차 조회 miss 5, 2~3차 조회 hit 10, hitRate ≈ 66.7%
-- **의미**: `recordStats()`는 lock-free atomic counter 기반이라 성능 오버헤드가 극히 작음
+- **의미**: `recordStats()`는 lock-free `LongAdder` 기반이라 성능 오버헤드가 극히 작음 (`LongAdder`는 내부 cell-striping으로 고경합에서도 `AtomicLong`보다 효율적)
 
 ### 실험 6-3: TTL 만료와 DB 재조회
 

@@ -350,10 +350,12 @@ val id: Long? = null
 val id: Long? = null
 ```
 
-### 2. 인덱스 임시 비활성화
+### 2. 인덱스 임시 비활성화 (MyISAM 전용)
+
+> ⚠️ `DISABLE KEYS` / `ENABLE KEYS`는 **MyISAM 전용** 기능이다. InnoDB(MySQL 8.0 기본 엔진)에서는 효과가 없다.
 
 ```sql
--- 대량 INSERT 전
+-- 대량 INSERT 전 (MyISAM 테이블만 유효)
 ALTER TABLE transaction DISABLE KEYS;
 
 -- INSERT 실행
