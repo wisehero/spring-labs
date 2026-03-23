@@ -6,14 +6,14 @@ Spring Framework의 숨겨진 동작들을 직접 테스트하고 검증하는 �
 
 | # | 주제 | 난이도 | 상태 |
 |---|------|--------|------|
-| 0 | [Count Query 최적화 (46% 성능 향상)](docs/labs/lab-00-count-query-optimization.md) | ⭐ | ✅ 완료 |
-| 1 | [@Transactional 자기 호출 함정](docs/labs/lab-01-transactional-self-invocation.md) | ⭐ | ✅ 완료 |
-| 2 | [@Transactional(readOnly=true) 실제 효과](docs/labs/lab-02-transactional-readonly.md) | ⭐⭐ | ✅ 완료 |
-| 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](docs/labs/lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
-| 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](docs/labs/lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
-| 5 | [Optimistic Lock vs Pessimistic Lock](docs/labs/lab-05-optimistic-pessimistic-lock.md) | ⭐⭐⭐ | ✅ 완료 |
-| 6 | [Caffeine Cache 조회 성능 최적화](docs/labs/lab-06-caffeine-cache.md) | ⭐⭐ | ✅ 완료 |
-| 7 | [N+1 Problem](docs/labs/lab-07-n-plus-one.md) | ⭐⭐ | ✅ 완료 |
+| 0 | [Count Query 최적화 (46% 성능 향상)](docs/labs/lab-00-count-query-optimization/lab-00-count-query-optimization.md) | ⭐ | ✅ 완료 |
+| 1 | [@Transactional 자기 호출 함정](docs/labs/lab-01-transactional-self-invocation/lab-01-transactional-self-invocation.md) | ⭐ | ✅ 완료 |
+| 2 | [@Transactional(readOnly=true) 실제 효과](docs/labs/lab-02-transactional-readonly/lab-02-transactional-readonly.md) | ⭐⭐ | ✅ 완료 |
+| 3 | [Bulk Insert 성능 비교 (saveAll vs JdbcTemplate vs Native)](docs/labs/lab-03-bulk-insert-performance/lab-03-bulk-insert-performance.md) | ⭐⭐ | ✅ 완료 |
+| 4 | [트랜잭션 전파 REQUIRED vs REQUIRES_NEW](docs/labs/lab-04-transaction-propagation/lab-04-transaction-propagation.md) | ⭐⭐⭐ | ✅ 완료 |
+| 5 | [Optimistic Lock vs Pessimistic Lock](docs/labs/lab-05-optimistic-pessimistic-lock/lab-05-optimistic-pessimistic-lock.md) | ⭐⭐⭐ | ✅ 완료 |
+| 6 | [Caffeine Cache 조회 성능 최적화](docs/labs/lab-06-caffeine-cache/lab-06-caffeine-cache.md) | ⭐⭐ | ✅ 완료 |
+| 7 | [N+1 Problem](docs/labs/lab-07-n-plus-one/lab-07-n-plus-one.md) | ⭐⭐ | ✅ 완료 |
 
 ## 실험 환경
 

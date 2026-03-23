@@ -47,16 +47,15 @@
 
 | 폰트 | 용도 | Google Fonts weight |
 |------|------|---------------------|
-| **Noto Sans KR** | 본문, 제목, UI 텍스트 | 400, 500, 700, 900 |
-| **DM Serif Display** | 대형 숫자, 메트릭 값 | 400 |
-| **D2Coding** | 코드, 기술 레이블, 배지 | - |
+| **Noto Sans KR** | 본문, 제목, UI 텍스트, 메트릭 숫자 | 400, 500, 700, 900 |
+| **D2Coding** | 코드 블록, 시뮬레이터 출력 전용 | - |
 
 ### 크기 체계
 
 | 요소 | 크기 | weight |
 |------|------|--------|
 | masthead h1 | `clamp(32px, 5vw, 72px)` | 900 |
-| metric 숫자 | 36~40px (serif) | 400 |
+| metric 숫자 | 36~40px | 900 |
 | section-title | 22px | 700 |
 | 카드 제목 (h3) | 15~16px | 700 |
 | 본문 | 13~15px | 400 |
@@ -177,7 +176,7 @@ body (background: --void)
 
 - `.metrics-row`: `grid-template-columns: repeat(4, 1fr)`, 900px 이하에서 `repeat(2, 1fr)`
 - `::before`: 상단 2px gradient 라인 (색상에 맞춤)
-- `.metric-value`: serif 폰트 (DM Serif Display), 36~40px
+- `.metric-value`: Noto Sans KR, 36~40px, weight 900
 
 ### 비교 카드 (compare-card / cmp-card)
 
@@ -243,7 +242,7 @@ body (background: --void)
 </div>
 ```
 
-- `.step-num`: 48x48px, border-radius 14px, serif 폰트 20px
+- `.step-num`: 48x48px, border-radius 14px, Noto Sans KR 20px
 - 상태 클래스: `danger` (red 좌측 테두리), `success` (green)
 
 ### Best Practice 카드 (bp-card)
@@ -363,7 +362,7 @@ body (background: --void)
 새 Lab HTML을 만들 때 확인할 항목:
 
 - [ ] `:root` 변수가 표준 팔레트와 동일한가
-- [ ] Google Fonts에서 Noto Sans KR, DM Serif Display, D2Coding을 로드하는가
+- [ ] Google Fonts에서 Noto Sans KR, D2Coding을 로드하는가 (DM Serif Display 사용 금지)
 - [ ] `.page-wrap` > `.masthead` > `.section` 순서를 따르는가
 - [ ] `.masthead-tag`에 Lab 번호가 있는가
 - [ ] 각 섹션에 `.sec-label`과 `.section-title`이 있는가

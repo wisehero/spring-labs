@@ -52,7 +52,7 @@ sql/                  # DB 스키마 + 초기 데이터
 | Service | `[주제]ExperimentService.kt` | `NplusOneExperimentService.kt` |
 | Inner Service | `[주제]ExperimentInnerService.kt` | 별도 빈 필요시만 |
 | DTO | `dto/[주제]Result.kt` | `dto/NplusOneResult.kt` |
-| 문서 | `docs/labs/lab-XX-[영문-kebab-case].md` | `docs/labs/lab-05-n-plus-one.md` |
+| 문서 | `docs/labs/lab-XX-[영문-kebab-case]/lab-XX-[영문-kebab-case].md` | `docs/labs/lab-05-n-plus-one/lab-05-n-plus-one.md` |
 | HTTP 테스트 | 기존 `experiment-api.http`에 추가 | 섹션 구분 주석 사용 |
 
 ### 엔드포인트 규칙
